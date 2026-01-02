@@ -118,6 +118,8 @@ PACKAGE_DIRS = [
     "src/base",
     "src/utils",
     "src/xml",
+    # Dawn headers for Graphite WebGPU backend
+    "third_party/externals/dawn/include",
     # "third_party/externals/icu/source/common/unicode"
 ]
 
