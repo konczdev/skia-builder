@@ -238,6 +238,87 @@ PLATFORM_GN_ARGS = {
     """
 }
 
+# CPU-only GN args (disable all GPU backends)
+CPU_ONLY_GN_ARGS = """
+skia_enable_gpu = false
+skia_enable_graphite = false
+skia_use_gl = false
+skia_use_vulkan = false
+"""
+
+# Platform-specific CPU-only GN args
+PLATFORM_GN_ARGS_CPU = {
+    "mac": f"""
+    skia_use_metal = false
+    skia_use_dawn = false
+    target_os = "mac"
+    extra_cflags = ["-mmacosx-version-min={MAC_MIN_VERSION}"]
+    extra_asmflags = ["-mmacosx-version-min={MAC_MIN_VERSION}"]
+    extra_cflags_c = ["-Wno-error"]
+    """,
+
+    "ios": f"""
+    skia_use_metal = false
+    target_os = "ios"
+    skia_ios_use_signing = false
+    extra_cflags = [
+        "-miphoneos-version-min={IOS_MIN_VERSION}",
+        "-I../../../src/skia/third_party/externals/expat/lib"
+    ]
+    extra_cflags_c = ["-Wno-error"]
+    """,
+
+    "win": """
+    skia_use_dawn = false
+    skia_use_direct3d = false
+    is_trivial_abi = false
+    """,
+
+    "wasm": """
+    target_os = "wasm"
+    is_component_build = false
+    is_trivial_abi = true
+    werror = true
+    skia_use_angle = false
+    skia_use_dng_sdk = false
+    skia_use_webgl = false
+    skia_use_webgpu = false
+    skia_use_expat = false
+    skia_use_fontconfig = false
+    skia_use_freetype = true
+    skia_use_libheif = false
+    skia_use_libjpeg_turbo_decode = true
+    skia_use_libjpeg_turbo_encode = false
+    skia_use_no_jpeg_encode = true
+    skia_use_libpng_decode = true
+    skia_use_libpng_encode = true
+    skia_use_no_png_encode = false
+    skia_use_libwebp_decode = true
+    skia_use_libwebp_encode = false
+    skia_use_no_webp_encode = true
+    skia_use_lua = false
+    skia_use_piex = false
+    skia_use_system_freetype2 = false
+    skia_use_system_libwebp = false
+    skia_use_vulkan = false
+    skia_use_wuffs = true
+    skia_use_zlib = true
+    skia_enable_ganesh = false
+    skia_enable_graphite = false
+    skia_build_for_debugger = false
+    skia_enable_skottie = false
+    skia_use_client_icu = false
+    skia_use_icu4x = false
+    skia_use_harfbuzz = true
+    skia_use_system_harfbuzz = false
+    skia_enable_fontmgr_custom_directory = false
+    skia_enable_fontmgr_custom_embedded = true
+    skia_enable_fontmgr_custom_empty = true
+    skia_use_freetype_woff2 = true
+    skia_enable_skshaper = true
+    """
+}
+
 class SkiaBuildScript:
     def __init__(self):
         self.platform = None
@@ -245,6 +326,7 @@ class SkiaBuildScript:
         self.archs = []
         self.xcframework = False
         self.branch = None
+        self.variant = "gpu"
 
     def parse_arguments(self):
         parser = argparse.ArgumentParser(description="Build Skia for macOS, iOS, Windows and WebAssembly")
@@ -253,6 +335,8 @@ class SkiaBuildScript:
         parser.add_argument("-config", choices=["Debug", "Release"], default="Release", help="Build configuration")
         parser.add_argument("-archs", help="Target architectures (comma-separated)")
         parser.add_argument("-branch", help="Skia Git branch to checkout", default="main")
+        parser.add_argument("-variant", choices=["cpu", "gpu"], default="gpu",
+                           help="Build variant: cpu (no GPU) or gpu (with Graphite/Dawn)")
         parser.add_argument("--shallow", action="store_true", help="Perform a shallow clone of the Skia repository")
         parser.add_argument("--zip-all", action="store_true", 
                            help="Create a zip archive containing all platform libraries")
@@ -272,6 +356,7 @@ class SkiaBuildScript:
                 self.archs = self.get_default_archs()
 
         self.branch = args.branch
+        self.variant = args.variant
         self.shallow_clone = args.shallow
         self.create_zip_all = args.zip_all
         self.validate_archs()
@@ -298,6 +383,18 @@ class SkiaBuildScript:
                 colored_print(f"Invalid architecture for {self.platform}: {arch}", Colors.FAIL)
                 sys.exit(1)
 
+    def get_lib_dir(self, platform):
+        """Get the library directory for a platform, including variant suffix."""
+        variant_suffix = f"-{self.variant}"
+        if platform == "mac":
+            return BASE_DIR / f"mac{variant_suffix}" / "lib"
+        elif platform == "ios":
+            return BASE_DIR / f"ios{variant_suffix}" / "lib"
+        elif platform == "wasm":
+            return BASE_DIR / f"wasm{variant_suffix}" / "lib"
+        else:  # Windows
+            return BASE_DIR / f"win{variant_suffix}" / "lib"
+
     def setup_depot_tools(self):
         if not DEPOT_TOOLS_PATH.exists():
             subprocess.run(["git", "clone", DEPOT_TOOLS_URL, str(DEPOT_TOOLS_PATH)], check=True)
@@ -309,13 +406,18 @@ class SkiaBuildScript:
         subprocess.run(["python3", "tools/git-sync-deps"], check=True)
 
     def generate_gn_args(self, arch: str):
-        output_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}"
+        output_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}_{self.variant}"
         gn_args = BASIC_GN_ARGS
 
         if self.config == 'Debug':
             gn_args += f"is_debug = true\n"
         else:
-            gn_args += PLATFORM_GN_ARGS[self.platform]
+            # Use CPU or GPU platform-specific args based on variant
+            if self.variant == "cpu":
+                gn_args += PLATFORM_GN_ARGS_CPU[self.platform]
+                gn_args += CPU_ONLY_GN_ARGS
+            else:
+                gn_args += PLATFORM_GN_ARGS[self.platform]
             gn_args += RELEASE_GN_ARGS
             gn_args += "is_debug = false\n"
             gn_args += "is_official_build = true\n"
@@ -331,13 +433,13 @@ class SkiaBuildScript:
         elif self.platform == "wasm":
             gn_args += "target_cpu = \"wasm\"\n"
 
-        colored_print(f"Generating gn args for {self.platform} {arch} settings:", Colors.OKBLUE)
+        colored_print(f"Generating gn args for {self.platform} {arch} ({self.variant}) settings:", Colors.OKBLUE)
         colored_print(f"{gn_args}", Colors.OKGREEN)
 
         subprocess.run(["./bin/gn", "gen", str(output_dir), f"--args={gn_args}"], check=True)
 
     def build_skia(self, arch: str):
-        output_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}"
+        output_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}_{self.variant}"
         
         # Get the list of libraries for the current platform
         libs_to_build = LIBS[self.platform]
@@ -360,18 +462,19 @@ class SkiaBuildScript:
             sys.exit(1)
 
     def move_libs(self, arch: str):
-        src_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}"
+        src_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}_{self.variant}"
+        lib_dir = self.get_lib_dir(self.platform)
         if self.platform == "mac":
-            dest_dir = MAC_LIB_DIR / self.config / (arch if arch != "universal" else "")
+            dest_dir = lib_dir / self.config / (arch if arch != "universal" else "")
         elif self.platform == "ios":
-            dest_dir = IOS_LIB_DIR / self.config / arch
+            dest_dir = lib_dir / self.config / arch
         elif self.platform == "wasm":
-            dest_dir = WASM_LIB_DIR / self.config
+            dest_dir = lib_dir / self.config
         else:  # Windows
-            dest_dir = WIN_LIB_DIR / self.config / arch
+            dest_dir = lib_dir / self.config / arch
 
         dest_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Copy the libraries
         for lib in LIBS[self.platform]:
             src_file = src_dir / lib
@@ -386,26 +489,28 @@ class SkiaBuildScript:
     # Lipo different architectures into a universal binary
     def create_universal_binary(self):
         colored_print('Creating universal files...', Colors.OKBLUE)
-        dest_dir = MAC_LIB_DIR / self.config
+        lib_dir = self.get_lib_dir("mac")
+        dest_dir = lib_dir / self.config
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         for lib in LIBS[self.platform]:
-            input_libs = [str(MAC_LIB_DIR / self.config / arch / lib) for arch in ["x86_64", "arm64"]]
+            input_libs = [str(lib_dir / self.config / arch / lib) for arch in ["x86_64", "arm64"]]
             output_lib = str(dest_dir / lib)
             subprocess.run(["lipo", "-create"] + input_libs + ["-output", output_lib], check=True)
             colored_print(f"Created universal file: {lib}", Colors.OKGREEN)
 
         # Remove architecture-specific folders
-        shutil.rmtree(MAC_LIB_DIR / self.config / "x86_64", ignore_errors=True)
-        shutil.rmtree(MAC_LIB_DIR / self.config / "arm64", ignore_errors=True)
+        shutil.rmtree(lib_dir / self.config / "x86_64", ignore_errors=True)
+        shutil.rmtree(lib_dir / self.config / "arm64", ignore_errors=True)
 
     # Combine the various skia libraries into a single static library for each platform
     def combine_libraries(self, platform, arch):
         colored_print(f"Combining libraries for {platform} {arch}...", Colors.OKBLUE)
+        base_lib_dir = self.get_lib_dir(platform)
         if platform == "mac":
-            lib_dir = MAC_LIB_DIR / self.config / (arch if arch != "universal" else "")
+            lib_dir = base_lib_dir / self.config / (arch if arch != "universal" else "")
         else:  # iOS
-            lib_dir = IOS_LIB_DIR / self.config / arch
+            lib_dir = base_lib_dir / self.config / arch
 
         output_lib = lib_dir / "libSkia.a"
         input_libs = [str(lib_dir / lib) for lib in LIBS[platform] if (lib_dir / lib).exists()]
@@ -431,8 +536,9 @@ class SkiaBuildScript:
         xcframework_command = ["xcodebuild", "-create-xcframework"]
 
         # Add iOS libraries
+        ios_lib_dir = self.get_lib_dir("ios")
         for ios_arch in ["x86_64", "arm64"]:
-            ios_lib_path = IOS_LIB_DIR / "Release" / ios_arch / "libSkia.a"
+            ios_lib_path = ios_lib_dir / "Release" / ios_arch / "libSkia.a"
             xcframework_command.extend(["-library", str(ios_lib_path)])
             # Add headers
             if with_headers:
@@ -440,7 +546,8 @@ class SkiaBuildScript:
                 xcframework_command.extend(["-headers", str(headers_path)])
 
         # Add macOS universal library
-        mac_lib_path = MAC_LIB_DIR / "Release" / "libSkia.a"
+        mac_lib_dir = self.get_lib_dir("mac")
+        mac_lib_path = mac_lib_dir / "Release" / "libSkia.a"
         xcframework_command.extend(["-library", str(mac_lib_path)])
 
         # Add headers
@@ -545,7 +652,7 @@ class SkiaBuildScript:
 
     def cleanup(self):
         for arch in self.archs:
-            shutil.rmtree(TMP_DIR / f"{self.platform}_{self.config}_{arch}", ignore_errors=True)
+            shutil.rmtree(TMP_DIR / f"{self.platform}_{self.config}_{arch}_{self.variant}", ignore_errors=True)
         colored_print("Cleaned up temporary directories", Colors.OKBLUE)
 
     def setup_skia_repo(self):
@@ -568,29 +675,32 @@ class SkiaBuildScript:
         colored_print("Skia repository setup complete.", Colors.OKGREEN)
     
     def generate_gn_args_summary(self, arch: str):
-        gn_args = BASIC_GN_ARGS + PLATFORM_GN_ARGS[self.platform] + RELEASE_GN_ARGS
+        if self.variant == "cpu":
+            gn_args = BASIC_GN_ARGS + PLATFORM_GN_ARGS_CPU[self.platform] + CPU_ONLY_GN_ARGS
+        else:
+            gn_args = BASIC_GN_ARGS + PLATFORM_GN_ARGS[self.platform]
+        gn_args += RELEASE_GN_ARGS
         gn_args += f"""
         is_debug = {"true" if self.config == 'Debug' else "false"}
         is_official_build = {"false" if self.config == 'Debug' else "true"}
         target_cpu = "{arch}"
+        variant = "{self.variant}"
         """
         return gn_args.strip()
 
     def write_gn_args_summary(self):
-        if self.platform == "mac":
-            summary_file = MAC_LIB_DIR / "gn_args.txt"
-        elif self.platform == "ios":
-            summary_file = IOS_LIB_DIR / "gn_args.txt"
-        elif self.platform == "wasm":
-            summary_file = BASE_DIR / "wasm" / "gn_args.txt"
-        else:  # Windows
-            summary_file = WIN_LIB_DIR / "gn_args.txt"
+        lib_dir = self.get_lib_dir(self.platform)
+        if self.platform == "wasm":
+            summary_file = lib_dir.parent / "gn_args.txt"
+        else:
+            summary_file = lib_dir / "gn_args.txt"
 
         summary_file.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(summary_file, "w") as f:
-            f.write(f"Skia Build Summary for {self.platform}\n")
+            f.write(f"Skia Build Summary for {self.platform} ({self.variant})\n")
             f.write(f"Configuration: {self.config}\n")
+            f.write(f"Variant: {self.variant}\n")
             f.write(f"Architectures: {', '.join(self.archs)}\n\n")
             f.write("GN Arguments:\n")
             for arch in self.archs:
@@ -687,14 +797,14 @@ class SkiaBuildScript:
     def create_all_platforms_zip(self):
         """Create a zip file containing headers and libraries for all platforms."""
         colored_print("Creating zip archive with all platforms...", Colors.OKBLUE)
-        
-        zip_path = BASE_DIR / "skia-all-platforms.zip"
+
+        zip_path = BASE_DIR / f"skia-all-platforms-{self.variant}.zip"
         include_dir = BASE_DIR / "include"
-        
+
         if not include_dir.exists():
             colored_print("Error: Include directory not found", Colors.FAIL)
             return
-        
+
         try:
             import zipfile
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -704,16 +814,10 @@ class SkiaBuildScript:
                         file_path = Path(root) / file
                         arcname = file_path.relative_to(BASE_DIR)
                         zipf.write(file_path, arcname)
-                
-                # Add all platform lib directories
-                platform_dirs = {
-                    "mac": MAC_LIB_DIR,
-                    "ios": IOS_LIB_DIR,
-                    "win": WIN_LIB_DIR,
-                    "wasm": WASM_LIB_DIR
-                }
-                
-                for platform, lib_dir in platform_dirs.items():
+
+                # Add all platform lib directories for current variant
+                for platform in ["mac", "ios", "win", "wasm"]:
+                    lib_dir = self.get_lib_dir(platform)
                     if lib_dir.exists():
                         for root, _, files in os.walk(lib_dir):
                             for file in files:
@@ -721,9 +825,9 @@ class SkiaBuildScript:
                                 arcname = file_path.relative_to(BASE_DIR)
                                 zipf.write(file_path, arcname)
                     else:
-                        colored_print(f"Warning: {platform} library directory not found", 
+                        colored_print(f"Warning: {platform} library directory not found",
                                     Colors.WARNING)
-            
+
             colored_print(f"Created zip archive at {zip_path}", Colors.OKGREEN)
         except Exception as e:
             colored_print(f"Error creating zip archive: {e}", Colors.FAIL)

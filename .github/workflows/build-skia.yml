@@ -17,12 +17,28 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: wasm
+            variant: cpu
+          - os: ubuntu-latest
+            platform: wasm
+            variant: gpu
           - os: macos-latest
             platform: mac
+            variant: cpu
+          - os: macos-latest
+            platform: mac
+            variant: gpu
           - os: macos-latest
             platform: ios
+            variant: cpu
+          - os: macos-latest
+            platform: ios
+            variant: gpu
           - os: windows-latest
             platform: win
+            variant: cpu
+          - os: windows-latest
+            platform: win
+            variant: gpu
     runs-on: ${{ matrix.os }}
     env:
       SKIA_BRANCH: chrome/m144
@@ -71,36 +87,27 @@ jobs:
       - name: Build Skia (Release)
         if: ${{ !inputs.test_mode }}
         run: |
-          python3 build-skia.py ${{ matrix.platform }} -config Release --shallow -branch ${{ env.SKIA_BRANCH }}
+          python3 build-skia.py ${{ matrix.platform }} -variant ${{ matrix.variant }} -config Release --shallow -branch ${{ env.SKIA_BRANCH }}
   
       - name: Create dummy files for test mode
         if: ${{ inputs.test_mode }}
         run: |
           mkdir -p build/include
-          mkdir -p build/${{ matrix.platform }}
+          mkdir -p build/${{ matrix.platform }}-${{ matrix.variant }}
           echo "Test file" > build/include/test.h
-          echo "Test lib" > build/${{ matrix.platform }}/test.lib
-          echo "GN args summary" > build/${{ matrix.platform }}/gn_args.txt
+          echo "Test lib" > build/${{ matrix.platform }}-${{ matrix.variant }}/test.lib
+          echo "GN args summary" > build/${{ matrix.platform }}-${{ matrix.variant }}/gn_args.txt
 
       - name: Package binaries
         shell: bash
         run: |
-          if [ "${{ runner.os }}" == "macOS" ]; then
-            zip -r skia-build-${{ matrix.platform }}.zip build/include build/${{ matrix.platform }}
-          elif [ "${{ runner.os }}" == "Windows" ]; then
-            7z a -tzip skia-build-${{ matrix.platform }}.zip build/include build/${{ matrix.platform }}
-          elif [ "${{ runner.os }}" == "Linux" ]; then
-            zip -r skia-build-wasm.zip build/include build/wasm
-          else
-            echo "Unsupported OS"
-            exit 1
-          fi
+          zip -r skia-build-${{ matrix.platform }}-${{ matrix.variant }}.zip build/include build/${{ matrix.platform }}-${{ matrix.variant }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skia-build-${{ matrix.platform }}
-          path: skia-build-${{ matrix.platform }}.zip
+          name: skia-build-${{ matrix.platform }}-${{ matrix.variant }}
+          path: skia-build-${{ matrix.platform }}-${{ matrix.variant }}.zip
 
       - name: Set SKIA_BRANCH output
         run: echo "skia_branch=${{ env.SKIA_BRANCH }}" >> $GITHUB_OUTPUT
@@ -122,10 +129,13 @@ jobs:
           draft: false
           prerelease: ${{ inputs.test_mode }}
           files: |
-            ./skia-build-wasm/skia-build-wasm.zip
-            ./skia-build-ios/skia-build-ios.zip
-            ./skia-build-win/skia-build-win.zip
-            ./skia-build-mac/skia-build-mac.zip
-            # ./skia-build-spm/skia-build-spm.zip
+            ./skia-build-wasm-cpu/skia-build-wasm-cpu.zip
+            ./skia-build-wasm-gpu/skia-build-wasm-gpu.zip
+            ./skia-build-ios-cpu/skia-build-ios-cpu.zip
+            ./skia-build-ios-gpu/skia-build-ios-gpu.zip
+            ./skia-build-win-cpu/skia-build-win-cpu.zip
+            ./skia-build-win-gpu/skia-build-win-gpu.zip
+            ./skia-build-mac-cpu/skia-build-mac-cpu.zip
+            ./skia-build-mac-gpu/skia-build-mac-gpu.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
