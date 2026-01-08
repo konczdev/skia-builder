@@ -42,6 +42,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set Git default branch
+        run: git config --global init.defaultBranch main
+
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -67,9 +70,6 @@ jobs:
         with:
           version: "19.1.0"
           env: true
-  
-      - name: Set Git default branch
-        run: git config --global init.defaultBranch main
 
       - name: Cache depot_tools and Skia source
         uses: actions/cache@v4
