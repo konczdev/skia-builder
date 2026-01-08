@@ -45,6 +45,12 @@ jobs:
       - name: Set Git default branch
         run: git config --global init.defaultBranch main
 
+      - name: Fix Git on macOS (use system git instead of Homebrew)
+        if: runner.os == 'macOS'
+        run: |
+          echo "/usr/bin" >> $GITHUB_PATH
+          /usr/bin/git --version
+
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
         run: |
