@@ -392,6 +392,7 @@ class SkiaBuildScript:
         self.variant = args.variant
         self.shallow_clone = args.shallow
         self.create_zip_all = args.zip_all
+        self.variant = args.variant
         self.validate_archs()
 
     def get_default_archs(self):
