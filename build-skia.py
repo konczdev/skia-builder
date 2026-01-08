@@ -203,6 +203,7 @@ PLATFORM_GN_ARGS = {
     """,
 
     "win": """
+    skia_use_vulkan = true
     skia_use_dawn = true
     skia_use_direct3d = true
     is_trivial_abi = false
