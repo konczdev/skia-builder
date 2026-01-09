@@ -799,7 +799,40 @@ class SkiaBuildScript:
             subprocess.run(["git", "checkout", self.branch], check=True)
             subprocess.run(["git", "reset", "--hard", f"origin/{self.branch}"], check=True)
         colored_print("Skia repository setup complete.", Colors.OKGREEN)
-    
+
+    def setup_gn_for_windows_arm64(self):
+        """Download x64 GN binary for Windows ARM64 (works under emulation)."""
+        import platform
+        import urllib.request
+        import zipfile
+        import io
+
+        # Only needed on Windows ARM64
+        if sys.platform != "win32" or platform.machine().lower() not in ("arm64", "aarch64"):
+            return
+
+        gn_path = SKIA_SRC_DIR / "bin" / "gn.exe"
+        if gn_path.exists():
+            colored_print("GN binary already exists, skipping download.", Colors.OKBLUE)
+            return
+
+        colored_print("Downloading GN for Windows ARM64 (x64 version)...", Colors.OKBLUE)
+        gn_url = "https://chrome-infra-packages.appspot.com/dl/gn/gn/windows-amd64/+/latest"
+
+        try:
+            gn_dir = SKIA_SRC_DIR / "bin"
+            gn_dir.mkdir(parents=True, exist_ok=True)
+
+            with urllib.request.urlopen(gn_url) as response:
+                zip_data = io.BytesIO(response.read())
+
+            with zipfile.ZipFile(zip_data) as zf:
+                zf.extractall(gn_dir)
+
+            colored_print(f"GN downloaded to {gn_path}", Colors.OKGREEN)
+        except Exception as e:
+            colored_print(f"Warning: Failed to download GN: {e}", Colors.WARNING)
+
     def generate_gn_args_summary(self, arch: str):
         if self.variant == "cpu":
             gn_args = BASIC_GN_ARGS + PLATFORM_GN_ARGS_CPU[self.platform] + CPU_ONLY_GN_ARGS
@@ -898,6 +931,7 @@ class SkiaBuildScript:
         self.parse_arguments()
         self.setup_depot_tools()
         self.setup_skia_repo()
+        self.setup_gn_for_windows_arm64()
 
         # if self.config == "Release":
         #     self.modify_deps()
