@@ -178,7 +178,6 @@ skia_enable_graphite = true
 skia_enable_svg = true
 skia_enable_skottie = true
 skia_enable_pdf = false
-skia_enable_gpu = true
 skia_enable_skparagraph = true
 """
 
@@ -265,7 +264,6 @@ PLATFORM_GN_ARGS = {
 
 # CPU-only GN args (disable all GPU backends)
 CPU_ONLY_GN_ARGS = """
-skia_enable_gpu = false
 skia_enable_graphite = false
 skia_use_gl = false
 skia_use_vulkan = false
