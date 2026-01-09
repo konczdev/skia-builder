@@ -4,6 +4,11 @@ on:
   # push:
   workflow_dispatch:
     inputs:
+      skia_branch:
+        description: 'Skia branch to build (e.g., chrome/m144)'
+        required: false
+        type: string
+        default: 'chrome/m144'
       test_mode:
         description: 'Run in test mode (skip Skia build)'
         required: false
@@ -73,7 +78,7 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.os }}
     env:
-      SKIA_BRANCH: chrome/m144
+      SKIA_BRANCH: ${{ inputs.skia_branch || 'chrome/m144' }}
     outputs:
       skia_branch: ${{ env.SKIA_BRANCH }}
     steps:
@@ -101,10 +106,25 @@ jobs:
           python-version: '3.x'
 
       - name: Install LLVM and Clang
+        if: ${{ !(matrix.os == 'windows-11-arm') }}
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "19.1.0"
+          version: "21.1.0"
           env: true
+
+      - name: Install LLVM and Clang (Windows ARM64)
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $llvmUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.0/LLVM-21.1.0-woa64.exe"
+          $installerPath = "$env:TEMP\llvm-installer.exe"
+          Write-Host "Downloading LLVM installer..."
+          Invoke-WebRequest -Uri $llvmUrl -OutFile $installerPath
+          Write-Host "Installing LLVM silently..."
+          Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
+          Write-Host "LLVM installed successfully"
+          # Add LLVM to PATH
+          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Set Git default branch
         run: git config --global init.defaultBranch main
