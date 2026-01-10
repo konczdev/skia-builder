@@ -21,6 +21,7 @@
     #include <GLFW/glfw3native.h>
 #elif defined(__linux__)
     #define GLFW_EXPOSE_NATIVE_X11
+    #define GLFW_EXPOSE_NATIVE_WAYLAND
     #include <GLFW/glfw3native.h>
     // X11 headers define many macros that conflict with Dawn/WebGPU enums
     #undef Always
@@ -219,7 +220,11 @@ void drawContent(SkCanvas* canvas) {
 #elif defined(_WIN32)
     canvas->drawString("Backend: D3D12/Vulkan", 50, 110, font, textPaint);
 #elif defined(__linux__)
-    canvas->drawString("Backend: Vulkan", 50, 110, font, textPaint);
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+        canvas->drawString("Backend: Vulkan (Wayland)", 50, 110, font, textPaint);
+    } else {
+        canvas->drawString("Backend: Vulkan (X11)", 50, 110, font, textPaint);
+    }
 #endif
 }
 
@@ -248,14 +253,28 @@ wgpu::Surface createSurface(GLFWwindow* window) {
     return g_instance.CreateSurface(&surfaceDesc);
 
 #elif defined(__linux__)
-    // Linux: Create X11 surface (Xlib)
-    wgpu::SurfaceSourceXlibWindow x11SurfaceDesc;
-    x11SurfaceDesc.display = glfwGetX11Display();
-    x11SurfaceDesc.window = static_cast<uint64_t>(glfwGetX11Window(window));
+    // Linux: Detect platform at runtime (requires GLFW 3.4+)
+    int platform = glfwGetPlatform();
 
-    wgpu::SurfaceDescriptor surfaceDesc;
-    surfaceDesc.nextInChain = &x11SurfaceDesc;
-    return g_instance.CreateSurface(&surfaceDesc);
+    if (platform == GLFW_PLATFORM_WAYLAND) {
+        // Wayland surface
+        wgpu::SurfaceSourceWaylandSurface waylandSurfaceDesc;
+        waylandSurfaceDesc.display = glfwGetWaylandDisplay();
+        waylandSurfaceDesc.surface = glfwGetWaylandWindow(window);
+
+        wgpu::SurfaceDescriptor surfaceDesc;
+        surfaceDesc.nextInChain = &waylandSurfaceDesc;
+        return g_instance.CreateSurface(&surfaceDesc);
+    } else {
+        // X11 surface (Xlib)
+        wgpu::SurfaceSourceXlibWindow x11SurfaceDesc;
+        x11SurfaceDesc.display = glfwGetX11Display();
+        x11SurfaceDesc.window = static_cast<uint64_t>(glfwGetX11Window(window));
+
+        wgpu::SurfaceDescriptor surfaceDesc;
+        surfaceDesc.nextInChain = &x11SurfaceDesc;
+        return g_instance.CreateSurface(&surfaceDesc);
+    }
 #endif
 }
 

@@ -186,7 +186,7 @@ elseif(APPLE)
     endif()
 elseif(UNIX AND NOT APPLE)
     if(USE_NATIVE_GRAPHITE)
-        # Native Graphite on Linux needs Vulkan, X11 libs, and GLFW
+        # Native Graphite on Linux needs Vulkan, X11/Wayland libs, and GLFW
         find_package(Vulkan REQUIRED)
 
         target_link_libraries(example
@@ -195,6 +195,7 @@ elseif(UNIX AND NOT APPLE)
             Vulkan::Vulkan
             X11
             X11-xcb
+            wayland-client
             pthread
             dl
         )
