@@ -16,7 +16,7 @@ EMSDK_PATH = $(SKIA_SRC_DIR)/third_party/externals/emsdk
 
 HTTP_PORT = 8080
 
-.PHONY: skia-mac skia-ios skia-wasm clean example-mac example-wasm serve-wasm skia-xcframework skia-spm
+.PHONY: skia-mac skia-ios skia-wasm skia-linux clean example-mac example-wasm serve-wasm skia-xcframework skia-spm example-mac-graphite example-linux-graphite
 
 # Default target
 all: skia-mac example-mac
@@ -53,6 +53,30 @@ serve-wasm: example-wasm
 	source $(EMSDK_PATH)/emsdk_env.sh && \
 	cd $(WASM_EXAMPLE_BUILD_DIR) && \
 	emrun --port $(HTTP_PORT) --browser chrome example.html
+
+# Build directories for native graphite examples
+MAC_GRAPHITE_BUILD_DIR = $(shell pwd)/example/build-mac-graphite
+LINUX_GRAPHITE_BUILD_DIR = $(shell pwd)/example/build-linux-graphite
+
+# Build Skia for Linux
+skia-linux:
+	$(SKIA_BUILDER) linux
+
+# Build native Graphite example for macOS (requires GLFW: brew install glfw)
+example-mac-graphite: skia-mac
+	mkdir -p $(MAC_GRAPHITE_BUILD_DIR) && \
+	cmake $(shell pwd)/example/CMakeLists.txt -B $(MAC_GRAPHITE_BUILD_DIR) \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DUSE_NATIVE_GRAPHITE=ON && \
+	cmake --build $(MAC_GRAPHITE_BUILD_DIR)
+
+# Build native Graphite example for Linux (requires GLFW: apt install libglfw3-dev)
+example-linux-graphite: skia-linux
+	mkdir -p $(LINUX_GRAPHITE_BUILD_DIR) && \
+	cmake $(shell pwd)/example/CMakeLists.txt -B $(LINUX_GRAPHITE_BUILD_DIR) \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DUSE_NATIVE_GRAPHITE=ON && \
+	cmake --build $(LINUX_GRAPHITE_BUILD_DIR)
 
 # Clean build artifacts
 clean:
