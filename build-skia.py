@@ -15,7 +15,7 @@ Usage:
 For detailed usage instructions, run:
     python3 build-skia.py --help
 
-Copyright (c) 2024 Oli Larkin
+Copyright (c) 2024-2026 Oli Larkin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

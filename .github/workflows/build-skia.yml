@@ -21,34 +21,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Phase 1: macOS GPU (done)
-          # - os: macos-latest
-          #   platform: mac
-          #   variant: gpu
-          #   arch: "universal"
-          # Phase 2: Windows x64 GPU (done)
-          # - os: windows-latest
-          #   platform: win
-          #   variant: gpu
-          #   arch: x64
-          # Phase 3: Linux x64 GPU (done)
-          # - os: ubuntu-24.04
-          #   platform: linux
-          #   variant: gpu
-          #   arch: x64
-          # Phase 4: WASM GPU
-          # - os: ubuntu-latest
-          #   platform: wasm
-          #   variant: gpu
-          #   arch: ""
-          #   config: Release
-          # Windows Debug build
+          - os: macos-latest
+            platform: mac
+            variant: gpu
+            arch: "universal"
+          - os: macos-latest
+            platform: ios
+            variant: gpu
+            arch: ""
+          - os: windows-latest
+            platform: win
+            variant: gpu
+            arch: x64
+            config: Release
           - os: windows-latest
             platform: win
             variant: gpu
             arch: x64
             config: Debug
-          # Phase 5: ARM64 platforms (later)
+          - os: ubuntu-latest
+            platform: linux
+            variant: gpu
+            arch: x64
+          - os: ubuntu-latest
+            platform: wasm
+            variant: gpu
+            arch: ""
+            config: Release
+
+          # ARM64 platforms (later)
           # - os: ubuntu-24.04-arm
           #   platform: linux
           #   variant: gpu
@@ -57,7 +58,7 @@ jobs:
           #   platform: win
           #   variant: gpu
           #   arch: arm64
-          # CPU variants (disabled for now)
+          # CPU variants
           # - os: macos-latest
           #   platform: mac
           #   variant: cpu
@@ -73,11 +74,6 @@ jobs:
           # - os: ubuntu-latest
           #   platform: wasm
           #   variant: cpu
-          #   arch: ""
-          # iOS (later)
-          # - os: macos-latest
-          #   platform: ios
-          #   variant: gpu
           #   arch: ""
           # - os: macos-latest
           #   platform: ios
