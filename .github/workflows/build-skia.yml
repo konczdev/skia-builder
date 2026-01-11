@@ -182,6 +182,15 @@ jobs:
           # Add LLVM to PATH
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Set cache key arch
+        if: steps.check.outputs.should_build == 'true'
+        id: cache-key
+        shell: bash
+        run: |
+          # Replace commas with dashes for cache key (commas not allowed)
+          ARCH_SAFE=$(echo "${{ matrix.arch || 'default' }}" | tr ',' '-')
+          echo "arch=${ARCH_SAFE}" >> $GITHUB_OUTPUT
+
       - name: Cache depot_tools and Skia source
         if: steps.check.outputs.should_build == 'true'
         uses: actions/cache@v4
@@ -189,7 +198,7 @@ jobs:
           path: |
             build/tmp/depot_tools
             build/src/skia
-          key: ${{ runner.os }}-${{ matrix.arch || 'default' }}-depot_tools-skia-${{ env.SKIA_BRANCH }}-${{ hashFiles('build-skia.py') }}
+          key: ${{ runner.os }}-${{ steps.cache-key.outputs.arch }}-depot_tools-skia-${{ env.SKIA_BRANCH }}-${{ hashFiles('build-skia.py') }}
 
       # - name: Build Skia (Debug)
       #   if: ${{ !inputs.test_mode }}
