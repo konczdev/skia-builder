@@ -89,10 +89,26 @@ This approach was informed by research into:
 
 ## CI
 
-The GitHub Actions workflow (`.github/workflows/build-skia.yml`) builds all platforms in parallel and creates releases tagged with the Skia branch name. Change `SKIA_BRANCH` env var to target different Skia versions.
+The GitHub Actions workflow (`.github/workflows/build-skia.yml`) builds all platforms in parallel and creates releases tagged with the Skia branch name.
+
+**Workflow inputs:**
+- `skia_branch` - Skia branch to build (default: `chrome/m144`)
+- `platforms` - Platforms to build, comma-separated or `all` (default: `all`)
+- `skip_release` - Skip creating release, useful for testing (default: `false`)
+- `test_mode` - Skip actual build, create dummy files (default: `false`)
 
 ```bash
-gh workflow run build-skia.yml                     # Build all platforms
-gh workflow run build-skia.yml -f platforms=visionos  # Build only visionOS
-gh run list                                        # Check CI status
+# Build all platforms and create release
+gh workflow run build-skia.yml
+
+# Build specific platform(s) without release
+gh workflow run build-skia.yml -f platforms=visionos -f skip_release=true
+gh workflow run build-skia.yml -f platforms=mac,ios -f skip_release=true
+
+# Build with different Skia branch
+gh workflow run build-skia.yml -f skia_branch=chrome/m145
+
+# Check CI status
+gh run list
+gh run view <run-id> --log-failed
 ```

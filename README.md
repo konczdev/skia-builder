@@ -85,18 +85,33 @@ py -3 build-skia.py -config Release -branch chrome/m129 win
 
 The repository includes a GitHub Actions workflow (`.github/workflows/build-skia.yml`) that builds all platforms in parallel and creates releases tagged with the Skia branch name.
 
-### Trigger a build manually
+### Workflow Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `skia_branch` | Skia branch to build | `chrome/m144` |
+| `platforms` | Platforms to build (comma-separated or `all`) | `all` |
+| `skip_release` | Skip creating release | `false` |
+| `test_mode` | Skip build, create dummy files | `false` |
+
+### Trigger Builds
 
 ```bash
+# Build all platforms and create release
 gh workflow run build-skia.yml
+
+# Build specific platform(s) without creating a release
+gh workflow run build-skia.yml -f platforms=visionos -f skip_release=true
+gh workflow run build-skia.yml -f platforms=mac,ios -f skip_release=true
+gh workflow run build-skia.yml -f platforms=win -f skip_release=true
+
+# Build with a different Skia branch
+gh workflow run build-skia.yml -f skia_branch=chrome/m145
 ```
 
-### Check CI status
+### Check CI Status
 
 ```bash
 gh run list
+gh run view <run-id> --log-failed
 ```
-
-### Configuration
-
-To target a different Skia version, change the `SKIA_BRANCH` environment variable in the workflow file.
