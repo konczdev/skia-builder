@@ -209,16 +209,13 @@ PLATFORM_GN_ARGS = {
     """,
 
     # visionOS: Use target_os="ios" because GN doesn't recognize "xros".
-    # The -target flag ensures clang uses the visionOS SDK and target triple.
+    # We must override the sysroot to use XROS SDK instead of iPhoneOS SDK.
+    # The sysroot path is computed dynamically in generate_gn_args().
     # See: https://github.com/Shopify/react-native-skia/issues/2280
     "visionos": f"""
     skia_use_metal = true
     target_os = "ios"
     skia_ios_use_signing = false
-    extra_cflags = [
-        "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}",
-        "-I../../../src/skia/third_party/externals/expat/lib"
-    ]
     extra_cflags_c = ["-Wno-error"]
     """,
 
@@ -311,14 +308,11 @@ PLATFORM_GN_ARGS_CPU = {
     """,
 
     # visionOS: Use target_os="ios" because GN doesn't recognize "xros".
+    # Sysroot and target flags are added dynamically in generate_gn_args().
     "visionos": f"""
     skia_use_metal = false
     target_os = "ios"
     skia_ios_use_signing = false
-    extra_cflags = [
-        "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}",
-        "-I../../../src/skia/third_party/externals/expat/lib"
-    ]
     extra_cflags_c = ["-Wno-error"]
     """,
 
@@ -504,7 +498,21 @@ class SkiaBuildScript:
         elif self.platform == "ios":
             gn_args += f"target_cpu = \"{'arm64' if arch == 'arm64' else 'x64'}\""
         elif self.platform == "visionos":
-            gn_args += "target_cpu = \"arm64\""
+            gn_args += "target_cpu = \"arm64\"\n"
+            # Get visionOS SDK path dynamically
+            sdk_result = subprocess.run(
+                ["xcrun", "--sdk", "xros", "--show-sdk-path"],
+                capture_output=True, text=True, check=True
+            )
+            xros_sdk = sdk_result.stdout.strip()
+            colored_print(f"Using visionOS SDK: {xros_sdk}", Colors.OKBLUE)
+            # Add extra_cflags with target and sysroot to override iOS defaults
+            gn_args += f"""extra_cflags = [
+        "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}",
+        "-isysroot", "{xros_sdk}",
+        "-I../../../src/skia/third_party/externals/expat/lib"
+    ]
+"""
         elif self.platform == "win":
             gn_args += f"extra_cflags = [\"{'/MTd' if self.config == 'Debug' else '/MT'}\"]\n"
             # Map architecture names to GN target_cpu values

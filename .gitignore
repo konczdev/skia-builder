@@ -5,3 +5,4 @@ example/build
 example/.cache
 .vs
 example/build-*
+.claude/

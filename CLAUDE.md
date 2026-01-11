@@ -77,9 +77,11 @@ build/
 
 visionOS builds use a workaround because **GN (Google's build tool) doesn't recognize visionOS/xros as a valid target OS**. This causes assertion failures in Skia's GN files (e.g., `third_party/zlib/BUILD.gn`).
 
-**Our approach:** Use `target_os = "ios"` with visionOS-specific compiler flags:
+**Our approach:** Use `target_os = "ios"` with explicit visionOS SDK and compiler flags:
 - `-target arm64-apple-xros1.0` tells clang to use the visionOS target triple
-- The visionOS SDK is automatically selected based on the target triple
+- `-isysroot <path>` explicitly points to the visionOS SDK (obtained via `xcrun --sdk xros --show-sdk-path`)
+
+The explicit sysroot is critical because `target_os = "ios"` causes GN to use the iOS SDK, but the iOS SDK's libc++ marks many functions as unavailable for visionOS (e.g., `__libcpp_verbose_abort`, `pthread_mutexattr_init`).
 
 This approach was informed by research into:
 - [react-native-skia #2280](https://github.com/Shopify/react-native-skia/issues/2280) - visionOS support blocked by GN limitations
