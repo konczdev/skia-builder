@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This repository provides a Python script and GitHub Actions workflow for building Skia static libraries for multiple platforms (macOS, iOS, Windows, Linux, WASM). It automates build environment setup, Skia repository cloning, GN argument configuration, and compilation.
+This repository provides a Python script and GitHub Actions workflow for building Skia static libraries for multiple platforms (macOS, iOS, visionOS, Windows, Linux, WASM). It automates build environment setup, Skia repository cloning, GN argument configuration, and compilation.
 
 ## Build Commands
 
@@ -17,6 +17,7 @@ ulimit -n 2048
 # Build libraries directly
 python3 build-skia.py mac                          # macOS universal (arm64 + x86_64)
 python3 build-skia.py ios                          # iOS (arm64 + x86_64 simulator)
+python3 build-skia.py visionos                     # visionOS (arm64)
 python3 build-skia.py win                          # Windows x64
 python3 build-skia.py linux                        # Linux x64
 python3 build-skia.py wasm                         # WebAssembly
@@ -60,6 +61,7 @@ build/
 ├── include/           # Packaged headers
 ├── mac/lib/           # macOS libraries
 ├── ios/lib/           # iOS libraries (per-arch)
+├── visionos/lib/      # visionOS libraries (arm64)
 ├── win/lib/           # Windows libraries
 ├── linux/lib/         # Linux libraries
 ├── wasm/lib/          # WASM libraries
@@ -71,11 +73,26 @@ build/
 - `MAC_MIN_VERSION` / `IOS_MIN_VERSION` set deployment targets
 - `EXCLUDE_DEPS` lists Skia dependencies to skip during sync
 
+## visionOS Support
+
+visionOS builds use a workaround because **GN (Google's build tool) doesn't recognize visionOS/xros as a valid target OS**. This causes assertion failures in Skia's GN files (e.g., `third_party/zlib/BUILD.gn`).
+
+**Our approach:** Use `target_os = "ios"` with visionOS-specific compiler flags:
+- `-target arm64-apple-xros1.0` tells clang to use the visionOS target triple
+- The visionOS SDK is automatically selected based on the target triple
+
+This approach was informed by research into:
+- [react-native-skia #2280](https://github.com/Shopify/react-native-skia/issues/2280) - visionOS support blocked by GN limitations
+- [react-native-webgpu #90](https://github.com/wcandillon/react-native-webgpu/pull/90) - successfully supports visionOS using CMake instead of GN
+
+**Alternative approach (not used):** Build with CMake instead of GN, like react-native-webgpu does for Dawn. This would require significant changes to the build script.
+
 ## CI
 
 The GitHub Actions workflow (`.github/workflows/build-skia.yml`) builds all platforms in parallel and creates releases tagged with the Skia branch name. Change `SKIA_BRANCH` env var to target different Skia versions.
 
 ```bash
-gh workflow run build-skia.yml   # Trigger a build manually
-gh run list                      # Check CI status
+gh workflow run build-skia.yml                     # Build all platforms
+gh workflow run build-skia.yml -f platforms=visionos  # Build only visionOS
+gh run list                                        # Check CI status
 ```

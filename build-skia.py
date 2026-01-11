@@ -208,9 +208,12 @@ PLATFORM_GN_ARGS = {
     extra_cflags_c = ["-Wno-error"]
     """,
 
+    # visionOS: Use target_os="ios" because GN doesn't recognize "xros".
+    # The -target flag ensures clang uses the visionOS SDK and target triple.
+    # See: https://github.com/Shopify/react-native-skia/issues/2280
     "visionos": f"""
     skia_use_metal = true
-    target_os = "xros"
+    target_os = "ios"
     skia_ios_use_signing = false
     extra_cflags = [
         "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}",
@@ -307,9 +310,10 @@ PLATFORM_GN_ARGS_CPU = {
     extra_cflags_c = ["-Wno-error"]
     """,
 
+    # visionOS: Use target_os="ios" because GN doesn't recognize "xros".
     "visionos": f"""
     skia_use_metal = false
-    target_os = "xros"
+    target_os = "ios"
     skia_ios_use_signing = false
     extra_cflags = [
         "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}",
