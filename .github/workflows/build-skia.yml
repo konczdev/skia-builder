@@ -46,11 +46,23 @@ jobs:
           - os: macos-latest
             platform: ios
             variant: gpu
-            arch: ""
+            arch: "arm64"
+            target: "device"
+          - os: macos-latest
+            platform: ios
+            variant: gpu
+            arch: "arm64,x86_64"
+            target: "simulator"
           - os: macos-latest
             platform: visionos
             variant: gpu
             arch: "arm64"
+            target: "device"
+          - os: macos-latest
+            platform: visionos
+            variant: gpu
+            arch: "arm64"
+            target: "simulator"
           - os: windows-latest
             platform: win
             variant: gpu
@@ -192,8 +204,12 @@ jobs:
           if [ -n "${{ matrix.arch }}" ]; then
             ARCH_ARG="-archs ${{ matrix.arch }}"
           fi
+          TARGET_ARG=""
+          if [ -n "${{ matrix.target }}" ]; then
+            TARGET_ARG="-target ${{ matrix.target }}"
+          fi
           CONFIG="${{ matrix.config || 'Release' }}"
-          python3 build-skia.py ${{ matrix.platform }} -variant ${{ matrix.variant }} -config $CONFIG --shallow -branch ${{ env.SKIA_BRANCH }} $ARCH_ARG
+          python3 build-skia.py ${{ matrix.platform }} -variant ${{ matrix.variant }} -config $CONFIG --shallow -branch ${{ env.SKIA_BRANCH }} $ARCH_ARG $TARGET_ARG
 
       - name: Set archive name
         if: steps.check.outputs.should_build == 'true'
@@ -202,11 +218,20 @@ jobs:
         run: |
           CONFIG="${{ matrix.config || 'Release' }}"
           CONFIG_LOWER=$(echo "$CONFIG" | tr '[:upper:]' '[:lower:]')
-          if [ -n "${{ matrix.arch }}" ]; then
-            echo "name=skia-build-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${CONFIG_LOWER}" >> $GITHUB_OUTPUT
-          else
-            echo "name=skia-build-${{ matrix.platform }}-${{ matrix.variant }}-${CONFIG_LOWER}" >> $GITHUB_OUTPUT
+          # Build name components
+          NAME="skia-build-${{ matrix.platform }}"
+          # Add target (device/simulator) if specified
+          if [ -n "${{ matrix.target }}" ]; then
+            NAME="${NAME}-${{ matrix.target }}"
           fi
+          # Add architecture if specified
+          if [ -n "${{ matrix.arch }}" ]; then
+            # Replace commas with dashes for multi-arch builds
+            ARCH_SAFE=$(echo "${{ matrix.arch }}" | tr ',' '-')
+            NAME="${NAME}-${ARCH_SAFE}"
+          fi
+          NAME="${NAME}-${{ matrix.variant }}-${CONFIG_LOWER}"
+          echo "name=${NAME}" >> $GITHUB_OUTPUT
 
       - name: Create dummy files for test mode
         if: steps.check.outputs.should_build == 'true' && inputs.test_mode
@@ -255,31 +280,45 @@ jobs:
         with:
           name: skia-build-mac-universal-gpu-release
 
-      - name: Download iOS artifact
+      - name: Download iOS device artifact
         uses: actions/download-artifact@v4
         with:
-          name: skia-build-ios-gpu-release
+          name: skia-build-ios-device-arm64-gpu-release
 
-      - name: Download visionOS artifact
+      - name: Download iOS simulator artifact
         uses: actions/download-artifact@v4
         with:
-          name: skia-build-visionos-arm64-gpu-release
+          name: skia-build-ios-simulator-arm64-x86_64-gpu-release
+
+      - name: Download visionOS device artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: skia-build-visionos-device-arm64-gpu-release
+
+      - name: Download visionOS simulator artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: skia-build-visionos-simulator-arm64-gpu-release
 
       - name: Extract artifacts
         run: |
           for zip in *.zip; do
+            echo "Extracting $zip..."
             unzip -o "$zip"
           done
-          ls -la build/
+          echo "Build directory structure:"
+          find build -name "libSkia.a" | head -20
 
       - name: Create XCFramework
         run: |
           xcodebuild -create-xcframework \
             -library build/mac-gpu/lib/Release/libSkia.a \
             -headers build/include \
-            -library build/ios-gpu/lib/Release/arm64/libSkia.a \
-            -library build/ios-gpu/lib/Release/x86_64/libSkia.a \
-            -library build/visionos-gpu/lib/Release/arm64/libSkia.a \
+            -library build/ios-gpu/lib/Release/device-arm64/libSkia.a \
+            -library build/ios-gpu/lib/Release/simulator-arm64/libSkia.a \
+            -library build/ios-gpu/lib/Release/simulator-x86_64/libSkia.a \
+            -library build/visionos-gpu/lib/Release/device-arm64/libSkia.a \
+            -library build/visionos-gpu/lib/Release/simulator-arm64/libSkia.a \
             -output Skia.xcframework
 
       - name: Package XCFramework
@@ -312,8 +351,10 @@ jobs:
             ./skia-build-mac-universal-gpu-release/skia-build-mac-universal-gpu-release.zip
             ./skia-build-mac-arm64-gpu-release/skia-build-mac-arm64-gpu-release.zip
             ./skia-build-mac-x86_64-gpu-release/skia-build-mac-x86_64-gpu-release.zip
-            ./skia-build-ios-gpu-release/skia-build-ios-gpu-release.zip
-            ./skia-build-visionos-arm64-gpu-release/skia-build-visionos-arm64-gpu-release.zip
+            ./skia-build-ios-device-arm64-gpu-release/skia-build-ios-device-arm64-gpu-release.zip
+            ./skia-build-ios-simulator-arm64-x86_64-gpu-release/skia-build-ios-simulator-arm64-x86_64-gpu-release.zip
+            ./skia-build-visionos-device-arm64-gpu-release/skia-build-visionos-device-arm64-gpu-release.zip
+            ./skia-build-visionos-simulator-arm64-gpu-release/skia-build-visionos-simulator-arm64-gpu-release.zip
             ./skia-build-win-x64-gpu-release/skia-build-win-x64-gpu-release.zip
             ./skia-build-win-x64-gpu-debug/skia-build-win-x64-gpu-debug.zip
             ./skia-build-linux-x64-gpu-release/skia-build-linux-x64-gpu-release.zip

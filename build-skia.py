@@ -385,6 +385,7 @@ class SkiaBuildScript:
         self.xcframework = False
         self.branch = None
         self.variant = "gpu"
+        self.target = "all"  # device, simulator, or all
 
     def parse_arguments(self):
         parser = argparse.ArgumentParser(description="Build Skia for macOS, iOS, visionOS, Windows, Linux and WebAssembly")
@@ -395,6 +396,8 @@ class SkiaBuildScript:
         parser.add_argument("-branch", help="Skia Git branch to checkout", default="main")
         parser.add_argument("-variant", choices=["cpu", "gpu"], default="gpu",
                            help="Build variant: cpu (no GPU) or gpu (with Graphite/Dawn)")
+        parser.add_argument("-target", choices=["device", "simulator", "all"], default="all",
+                           help="Build target for iOS/visionOS: device, simulator, or all")
         parser.add_argument("--shallow", action="store_true", help="Perform a shallow clone of the Skia repository")
         parser.add_argument("--zip-all", action="store_true", 
                            help="Create a zip archive containing all platform libraries")
@@ -415,9 +418,9 @@ class SkiaBuildScript:
 
         self.branch = args.branch
         self.variant = args.variant
+        self.target = args.target
         self.shallow_clone = args.shallow
         self.create_zip_all = args.zip_all
-        self.variant = args.variant
         self.validate_archs()
 
     def get_default_archs(self):
@@ -496,23 +499,65 @@ class SkiaBuildScript:
         if self.platform == "mac":
             gn_args += f"target_cpu = \"{arch}\""
         elif self.platform == "ios":
-            gn_args += f"target_cpu = \"{'arm64' if arch == 'arm64' else 'x64'}\""
-        elif self.platform == "visionos":
-            gn_args += "target_cpu = \"arm64\"\n"
-            # Get visionOS SDK path dynamically
-            sdk_result = subprocess.run(
-                ["xcrun", "--sdk", "xros", "--show-sdk-path"],
-                capture_output=True, text=True, check=True
-            )
-            xros_sdk = sdk_result.stdout.strip()
-            colored_print(f"Using visionOS SDK: {xros_sdk}", Colors.OKBLUE)
-            # Add extra_cflags with target and sysroot to override iOS defaults
-            gn_args += f"""extra_cflags = [
-        "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}",
-        "-isysroot", "{xros_sdk}",
+            cpu = "arm64" if arch == "arm64" else "x64"
+            gn_args += f'target_cpu = "{cpu}"\n'
+
+            # Determine if this is a simulator build
+            # x86_64 is always simulator, arm64 depends on target setting
+            is_simulator = (arch == "x86_64") or (self.target == "simulator")
+
+            if is_simulator:
+                # iOS Simulator build - need explicit SDK and target
+                sdk_result = subprocess.run(
+                    ["xcrun", "--sdk", "iphonesimulator", "--show-sdk-path"],
+                    capture_output=True, text=True, check=True
+                )
+                sdk_path = sdk_result.stdout.strip()
+                colored_print(f"Using iOS Simulator SDK: {sdk_path}", Colors.OKBLUE)
+                gn_args += f'''extra_cflags = [
+        "-target", "{arch}-apple-ios{IOS_MIN_VERSION}-simulator",
+        "-isysroot", "{sdk_path}",
         "-I../../../src/skia/third_party/externals/expat/lib"
     ]
-"""
+'''
+            else:
+                # iOS Device build - use default SDK
+                sdk_result = subprocess.run(
+                    ["xcrun", "--sdk", "iphoneos", "--show-sdk-path"],
+                    capture_output=True, text=True, check=True
+                )
+                sdk_path = sdk_result.stdout.strip()
+                colored_print(f"Using iOS Device SDK: {sdk_path}", Colors.OKBLUE)
+                gn_args += f'''extra_cflags = [
+        "-target", "{arch}-apple-ios{IOS_MIN_VERSION}",
+        "-isysroot", "{sdk_path}",
+        "-I../../../src/skia/third_party/externals/expat/lib"
+    ]
+'''
+        elif self.platform == "visionos":
+            gn_args += "target_cpu = \"arm64\"\n"
+
+            # Determine if this is a simulator build
+            is_simulator = (self.target == "simulator")
+            sdk_name = "xrsimulator" if is_simulator else "xros"
+            target_suffix = "-simulator" if is_simulator else ""
+
+            # Get visionOS SDK path dynamically
+            sdk_result = subprocess.run(
+                ["xcrun", "--sdk", sdk_name, "--show-sdk-path"],
+                capture_output=True, text=True, check=True
+            )
+            sdk_path = sdk_result.stdout.strip()
+            target_type = "Simulator" if is_simulator else "Device"
+            colored_print(f"Using visionOS {target_type} SDK: {sdk_path}", Colors.OKBLUE)
+
+            # Add extra_cflags with target and sysroot to override iOS defaults
+            gn_args += f'''extra_cflags = [
+        "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}{target_suffix}",
+        "-isysroot", "{sdk_path}",
+        "-I../../../src/skia/third_party/externals/expat/lib"
+    ]
+'''
         elif self.platform == "win":
             gn_args += f"extra_cflags = [\"{'/MTd' if self.config == 'Debug' else '/MT'}\"]\n"
             # Map architecture names to GN target_cpu values
@@ -564,9 +609,16 @@ class SkiaBuildScript:
         if self.platform == "mac":
             dest_dir = lib_dir / self.config / (arch if arch != "universal" else "")
         elif self.platform == "ios":
-            dest_dir = lib_dir / self.config / arch
+            # Include target (device/simulator) in path
+            # x86_64 is always simulator, arm64 depends on target setting
+            is_simulator = (arch == "x86_64") or (self.target == "simulator")
+            target_prefix = "simulator" if is_simulator else "device"
+            dest_dir = lib_dir / self.config / f"{target_prefix}-{arch}"
         elif self.platform == "visionos":
-            dest_dir = lib_dir / self.config / arch
+            # Include target (device/simulator) in path
+            is_simulator = (self.target == "simulator")
+            target_prefix = "simulator" if is_simulator else "device"
+            dest_dir = lib_dir / self.config / f"{target_prefix}-{arch}"
         elif self.platform == "wasm":
             dest_dir = lib_dir / self.config
         else:  # Windows, Linux
@@ -641,7 +693,12 @@ class SkiaBuildScript:
         base_lib_dir = self.get_lib_dir(platform)
         if platform == "mac":
             lib_dir = base_lib_dir / self.config / (arch if arch != "universal" else "")
-        else:  # iOS
+        elif platform in ["ios", "visionos"]:
+            # Use target-prefixed paths for iOS/visionOS
+            is_simulator = (arch == "x86_64") or (self.target == "simulator")
+            target_prefix = "simulator" if is_simulator else "device"
+            lib_dir = base_lib_dir / self.config / f"{target_prefix}-{arch}"
+        else:
             lib_dir = base_lib_dir / self.config / arch
 
         output_lib = lib_dir / "libSkia.a"
@@ -666,34 +723,45 @@ class SkiaBuildScript:
             shutil.rmtree(xcframework_path)
 
         xcframework_command = ["xcodebuild", "-create-xcframework"]
+        headers_path = BASE_DIR / "include"
 
-        # Add iOS libraries
+        # Add iOS libraries (device and simulator variants)
         ios_lib_dir = self.get_lib_dir("ios")
-        for ios_arch in ["x86_64", "arm64"]:
-            ios_lib_path = ios_lib_dir / "Release" / ios_arch / "libSkia.a"
-            xcframework_command.extend(["-library", str(ios_lib_path)])
-            # Add headers
-            if with_headers:
-                headers_path = BASE_DIR / "include"
-                xcframework_command.extend(["-headers", str(headers_path)])
+        ios_slices = [
+            ("device-arm64", "iOS device"),
+            ("simulator-arm64", "iOS simulator arm64"),
+            ("simulator-x86_64", "iOS simulator x86_64"),
+        ]
+        for slice_dir, desc in ios_slices:
+            lib_path = ios_lib_dir / "Release" / slice_dir / "libSkia.a"
+            if lib_path.exists():
+                colored_print(f"  Adding {desc}: {lib_path}", Colors.OKBLUE)
+                xcframework_command.extend(["-library", str(lib_path)])
+                if with_headers:
+                    xcframework_command.extend(["-headers", str(headers_path)])
 
         # Add macOS universal library
         mac_lib_dir = self.get_lib_dir("mac")
         mac_lib_path = mac_lib_dir / "Release" / "libSkia.a"
-        xcframework_command.extend(["-library", str(mac_lib_path)])
-
-        # Add headers
-        if with_headers:
-            headers_path = BASE_DIR / "include"
-            xcframework_command.extend(["-headers", str(headers_path)])
-
-        # Add visionOS library (arm64 only)
-        visionos_lib_dir = self.get_lib_dir("visionos")
-        visionos_lib_path = visionos_lib_dir / "Release" / "arm64" / "libSkia.a"
-        if visionos_lib_path.exists():
-            xcframework_command.extend(["-library", str(visionos_lib_path)])
+        if mac_lib_path.exists():
+            colored_print(f"  Adding macOS universal: {mac_lib_path}", Colors.OKBLUE)
+            xcframework_command.extend(["-library", str(mac_lib_path)])
             if with_headers:
                 xcframework_command.extend(["-headers", str(headers_path)])
+
+        # Add visionOS libraries (device and simulator)
+        visionos_lib_dir = self.get_lib_dir("visionos")
+        visionos_slices = [
+            ("device-arm64", "visionOS device"),
+            ("simulator-arm64", "visionOS simulator"),
+        ]
+        for slice_dir, desc in visionos_slices:
+            lib_path = visionos_lib_dir / "Release" / slice_dir / "libSkia.a"
+            if lib_path.exists():
+                colored_print(f"  Adding {desc}: {lib_path}", Colors.OKBLUE)
+                xcframework_command.extend(["-library", str(lib_path)])
+                if with_headers:
+                    xcframework_command.extend(["-headers", str(headers_path)])
 
         # Specify output
         xcframework_command.extend(["-output", str(xcframework_path)])
