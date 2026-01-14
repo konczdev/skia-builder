@@ -85,32 +85,32 @@ USE_LIBGRAPHEME = False  # Set to True to use libgrapheme instead of ICU
 # Shared libraries
 LIBS = {
     "mac": [
-        "libskia.a", "libskottie.a", "libskshaper.a", "libsksg.a",
+        "libskia.a", "libskottie.a", "libjsonreader.a", "libskshaper.a", "libsksg.a",
         "libskparagraph.a", "libsvg.a", "libskunicode_core.a",
         "libskunicode_libgrapheme.a" if USE_LIBGRAPHEME else "libskunicode_icu.a"
     ],
     "ios": [
-        "libskia.a", "libskottie.a", "libsksg.a", "libskshaper.a",
+        "libskia.a", "libskottie.a", "libjsonreader.a", "libsksg.a", "libskshaper.a",
         "libskparagraph.a", "libsvg.a", "libskunicode_core.a",
         "libskunicode_libgrapheme.a" if USE_LIBGRAPHEME else "libskunicode_icu.a"
     ],
     "visionos": [
-        "libskia.a", "libskottie.a", "libsksg.a", "libskshaper.a",
+        "libskia.a", "libskottie.a", "libjsonreader.a", "libsksg.a", "libskshaper.a",
         "libskparagraph.a", "libsvg.a", "libskunicode_core.a",
         "libskunicode_libgrapheme.a" if USE_LIBGRAPHEME else "libskunicode_icu.a"
     ],
     "win": [
-        "skia.lib", "skottie.lib", "sksg.lib", "skshaper.lib",
+        "skia.lib", "skottie.lib", "jsonreader.lib", "sksg.lib", "skshaper.lib",
         "skparagraph.lib", "svg.lib", "skunicode_core.lib",
         "skunicode_libgrapheme.lib" if USE_LIBGRAPHEME else "skunicode_icu.lib"
     ],
     "wasm": [
-        "libskia.a", "libskottie.a", "libskshaper.a", "libsksg.a",
+        "libskia.a", "libskottie.a", "libjsonreader.a", "libskshaper.a", "libsksg.a",
         "libskparagraph.a", "libsvg.a", "libskunicode_core.a",
         "libskunicode_libgrapheme.a" if USE_LIBGRAPHEME else "libskunicode_icu.a"
     ],
     "linux": [
-        "libskia.a", "libskottie.a", "libskshaper.a", "libsksg.a",
+        "libskia.a", "libskottie.a", "libjsonreader.a", "libskshaper.a", "libsksg.a",
         "libskparagraph.a", "libsvg.a", "libskunicode_core.a",
         "libskunicode_libgrapheme.a" if USE_LIBGRAPHEME else "libskunicode_icu.a"
     ]
@@ -129,6 +129,7 @@ GPU_LIBS = {
 # Directories to package
 PACKAGE_DIRS = [
     "include",
+    "modules/jsonreader",
     "modules/skottie",
     "modules/skparagraph",
     "modules/skshaper",
@@ -224,6 +225,7 @@ PLATFORM_GN_ARGS = {
     "win": """
     skia_use_dawn = true
     skia_use_direct3d = true
+    skia_use_vulkan = true
     is_trivial_abi = false
     """,
 
