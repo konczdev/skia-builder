@@ -471,7 +471,7 @@ class SkiaBuildScript:
     def sync_deps(self):
         os.chdir(SKIA_SRC_DIR)
         colored_print("Syncing Deps...", Colors.OKBLUE)
-        subprocess.run(["python3", "tools/git-sync-deps"], check=True)
+        subprocess.run([sys.executable, "tools/git-sync-deps"], check=True)
 
     def generate_gn_args(self, arch: str):
         output_dir = TMP_DIR / f"{self.platform}_{self.config}_{arch}_{self.variant}"
@@ -565,7 +565,22 @@ class SkiaBuildScript:
                 gn_args += "skia_use_gl = false\n"
             else:  # x64
                 gn_args += "target_cpu = \"x64\"\n"
-            gn_args += "clang_win = \"C:\\Program Files\\LLVM\"\n"
+            # Find Clang installation - prefer standalone LLVM, fallback to VS bundled
+            clang_paths = [
+                "C:\\Program Files\\LLVM",
+                "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\Llvm\\x64",
+                "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64",
+                "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\Llvm\\x64",
+            ]
+            clang_win = None
+            for path in clang_paths:
+                if os.path.isdir(path):
+                    clang_win = path
+                    break
+            if clang_win:
+                gn_args += f"clang_win = \"{clang_win}\"\n"
+            else:
+                colored_print("Warning: Clang/LLVM not found - build may fail", Colors.WARNING)
         elif self.platform == "linux":
             gn_args += f"target_cpu = \"{'arm64' if arch == 'arm64' else 'x64'}\"\n"
         elif self.platform == "wasm":
