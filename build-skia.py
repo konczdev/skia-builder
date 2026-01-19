@@ -549,11 +549,16 @@ class SkiaBuildScript:
             target_type = "Simulator" if is_simulator else "Device"
             colored_print(f"Using visionOS {target_type} SDK: {sdk_path}", Colors.OKBLUE)
 
-            # Add extra_cflags with target and sysroot to override iOS defaults
+            # Add extra_cflags and extra_asmflags with target and sysroot to override iOS defaults
+            # extra_asmflags is needed for ICU data file (icudtl_dat.o) to get correct platform metadata
             gn_args += f'''extra_cflags = [
         "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}{target_suffix}",
         "-isysroot", "{sdk_path}",
         "-I../../../src/skia/third_party/externals/expat/lib"
+    ]
+    extra_asmflags = [
+        "-target", "arm64-apple-xros{VISIONOS_MIN_VERSION}{target_suffix}",
+        "-isysroot", "{sdk_path}"
     ]
 '''
         elif self.platform == "win":
