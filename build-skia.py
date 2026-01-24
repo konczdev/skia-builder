@@ -131,6 +131,7 @@ PACKAGE_DIRS = [
     "include",
     "modules/jsonreader",
     "modules/skottie",
+    "modules/sksg",  # Required by Skottie
     "modules/skparagraph",
     "modules/skshaper",
     "modules/skresources",
