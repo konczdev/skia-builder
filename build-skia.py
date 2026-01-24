@@ -187,7 +187,7 @@ skia_use_libgrapheme = {"true" if USE_LIBGRAPHEME else "false"}
 skia_enable_graphite = true
 skia_enable_svg = true
 skia_enable_skottie = true
-skia_enable_pdf = false
+skia_enable_pdf = true
 skia_enable_skparagraph = true
 """
 
