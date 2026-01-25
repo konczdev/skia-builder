@@ -506,6 +506,9 @@ class SkiaBuildScript:
             # x86_64 is always simulator, arm64 depends on target setting
             is_simulator = (arch == "x86_64") or (self.target == "simulator")
 
+            # Pass simulator flag to Dawn build (needed for arm64 simulator on Apple Silicon)
+            gn_args += f'ios_use_simulator = {"true" if is_simulator else "false"}\n'
+
             if is_simulator:
                 # iOS Simulator build - need explicit SDK and target
                 sdk_result = subprocess.run(
@@ -541,6 +544,9 @@ class SkiaBuildScript:
             is_simulator = (self.target == "simulator")
             sdk_name = "xrsimulator" if is_simulator else "xros"
             target_suffix = "-simulator" if is_simulator else ""
+
+            # Pass simulator flag to Dawn build (visionOS uses target_os=ios in GN)
+            gn_args += f'ios_use_simulator = {"true" if is_simulator else "false"}\n'
 
             # Get visionOS SDK path dynamically
             sdk_result = subprocess.run(
@@ -837,7 +843,8 @@ class SkiaBuildScript:
         colored_print(f"Copied ICU data file to {icu_data_dest}", Colors.OKGREEN)
 
     def package_generated_dawn_headers(self, build_dir, dest_dir):
-        """Copy generated Dawn headers from build output to package."""
+        """Copy generated Dawn headers from build output to package.
+        Falls back to copying from existing macOS build if headers not found locally."""
         gen_include_dir = build_dir / "gen" / "third_party" / "dawn" / "include"
 
         # Copy dawn/*.h (webgpu.h, webgpu_cpp.h, etc.)
@@ -850,7 +857,10 @@ class SkiaBuildScript:
                 shutil.copy2(file, dest_dawn_dir / file.name)
                 colored_print(f"  Copied dawn/{file.name}", Colors.OKCYAN)
         else:
-            colored_print(f"Warning: Generated Dawn headers not found at {gen_dawn_dir}", Colors.WARNING)
+            # Fallback: try to copy from existing macOS build (headers are platform-agnostic)
+            colored_print(f"Dawn headers not found in build output, trying fallback...", Colors.WARNING)
+            self.copy_dawn_headers_from_macos(dest_dir)
+            return  # Fallback handles webgpu headers too
 
         # Copy webgpu/*.h (webgpu_cpp_chained_struct.h, etc.)
         gen_webgpu_dir = gen_include_dir / "webgpu"
@@ -863,11 +873,11 @@ class SkiaBuildScript:
                 colored_print(f"  Copied webgpu/{file.name}", Colors.OKCYAN)
 
     def copy_dawn_headers_from_macos(self, dest_dir):
-        """Copy Dawn headers from existing macOS build for iOS/visionOS.
+        """Fallback: Copy Dawn headers from existing macOS build.
 
-        iOS and visionOS use Metal directly and don't build Dawn, but we still need
-        the WebGPU headers for the Graphite API. These headers are platform-agnostic,
-        so we copy them from a macOS build.
+        Used when Dawn headers weren't generated locally (e.g., CPU-only variant
+        or if Dawn build failed). These headers are platform-agnostic, so they can
+        be copied from any platform's build output.
         """
         # Try multiple possible locations for macOS Dawn headers
         home_dir = Path.home()

@@ -1,8 +1,8 @@
 diff --git a/third_party/dawn/BUILD.gn b/third_party/dawn/BUILD.gn
-index 58690d8687..afe994c19e 100644
+index e920f0314b..4c2d60e486 100644
 --- a/third_party/dawn/BUILD.gn
 +++ b/third_party/dawn/BUILD.gn
-@@ -285,6 +285,32 @@ action("dawn_cmake") {
+@@ -281,6 +281,39 @@ action("dawn_cmake") {
    } else {
      args += [ "--dawn_enable_vulkan=false" ]
    }
@@ -32,6 +32,13 @@ index 58690d8687..afe994c19e 100644
 +      args += [ "--msvc_runtime_library=MultiThreaded" ]
 +    }
 +  }
++
++  # Pass iOS simulator flag to CMake (iOS only)
++  # This is needed because on Apple Silicon, arm64 is used for both device
++  # and simulator builds, so we can't infer simulator from CPU architecture.
++  if (is_ios && defined(ios_use_simulator) && ios_use_simulator) {
++    args += [ "--ios_simulator" ]
++  }
  
    args += sanitizer_args
  }
@@ -47,10 +54,10 @@ index b2c2e707d1..2fa6619a77 100644
 +  dawn_use_wayland = is_linux
  }
 diff --git a/third_party/dawn/build_dawn.py b/third_party/dawn/build_dawn.py
-index e23889e323..d193cf1476 100644
+index e23889e323..cd11fa99af 100644
 --- a/third_party/dawn/build_dawn.py
 +++ b/third_party/dawn/build_dawn.py
-@@ -54,6 +54,12 @@ def main():
+@@ -54,6 +54,15 @@ def main():
        "--dawn_enable_metal", default="false", help="Enable Metal backend.")
    parser.add_argument(
        "--dawn_enable_vulkan", default="false", help="Enable Vulkan backend.")
@@ -60,10 +67,13 @@ index e23889e323..d193cf1476 100644
 +      "--dawn_use_wayland", default="false", help="Enable Wayland surface support.")
 +  parser.add_argument(
 +      "--msvc_runtime_library", default="", help="MSVC runtime library (MultiThreaded or MultiThreadedDebug)")
++  parser.add_argument(
++      "--ios_simulator", action="store_true",
++      help="Building for iOS simulator (uses iphonesimulator SDK)")
    args = parser.parse_args()
  
    cmake_exe = shutil.which("cmake")
-@@ -107,7 +113,10 @@ def main():
+@@ -107,7 +116,10 @@ def main():
        f"-DDAWN_ENABLE_OPENGLES={gn_bool_to_cmake(args.dawn_enable_opengles)}",
        f"-DDAWN_ENABLE_METAL={gn_bool_to_cmake(args.dawn_enable_metal)}",
        f"-DDAWN_ENABLE_VULKAN={gn_bool_to_cmake(args.dawn_enable_vulkan)}",
@@ -74,7 +84,7 @@ index e23889e323..d193cf1476 100644
    configure_cmd += get_third_party_locations()
  
    if args.enable_rtti:
-@@ -122,6 +131,10 @@ def main():
+@@ -122,6 +134,10 @@ def main():
      cxx_flags += win_cxx
      ld_flags += win_ld
  
@@ -85,20 +95,20 @@ index e23889e323..d193cf1476 100644
      # The D3D backend requires the HLSL writer.
      configure_cmd.append("-DTINT_BUILD_HLSL_WRITER=ON")
    else:
-@@ -152,6 +165,11 @@ def main():
+@@ -152,6 +168,11 @@ def main():
  
    if target_os == "Darwin" or target_os == "iOS":
      configure_cmd.append(f"-DCMAKE_OSX_ARCHITECTURES={target_cpu}")
 +    if target_os == "iOS":
 +      # Get iOS SDK settings from cmake_utils
 +      from cmake_utils import get_ios_settings
-+      ios_cfgs = get_ios_settings(target_cpu)
++      ios_cfgs = get_ios_settings(target_cpu, is_simulator=args.ios_simulator)
 +      configure_cmd += ios_cfgs
  
    env = os.environ.copy()
    # Don't write .pyc files, which can cause race conditions when building
 diff --git a/third_party/dawn/cmake_utils.py b/third_party/dawn/cmake_utils.py
-index f2fd635c18..65c1a8450b 100644
+index ed4c89da34..8e44e45feb 100644
 --- a/third_party/dawn/cmake_utils.py
 +++ b/third_party/dawn/cmake_utils.py
 @@ -234,6 +234,13 @@ def get_cmake_os_cpu(os, cpu):
@@ -115,20 +125,27 @@ index f2fd635c18..65c1a8450b 100644
    if os == "win":
      target_cpu_map = {
        "arm64": "ARM64",
-@@ -329,6 +336,48 @@ def get_windows_settings(args):
-   return win_cfgs, win_cxx, win_ld
+@@ -245,6 +252,55 @@ def get_cmake_os_cpu(os, cpu):
+   sys.exit(1)
  
  
-+def get_ios_settings(target_cpu):
++def get_ios_settings(target_cpu, is_simulator=False):
 +  """Get CMake settings for iOS cross-compilation.
-+     Uses xcrun to find the appropriate iOS SDK."""
++     Uses xcrun to find the appropriate iOS SDK.
++
++     Args:
++       target_cpu: Target CPU architecture (arm64 or x64)
++       is_simulator: If True, use simulator SDK regardless of CPU architecture.
++                     This is important on Apple Silicon where arm64 is used for
++                     both device and simulator builds.
++  """
 +  ios_cfgs = []
 +
-+  # Determine if we're building for device or simulator based on CPU
-+  if target_cpu == "arm64":
-+    sdk_name = "iphoneos"
-+  else:
++  # Use simulator SDK if explicitly requested, otherwise device SDK
++  if is_simulator:
 +    sdk_name = "iphonesimulator"
++  else:
++    sdk_name = "iphoneos"
 +
 +  # Get SDK path using xcrun
 +  try:
@@ -161,10 +178,10 @@ index f2fd635c18..65c1a8450b 100644
 +  return ios_cfgs
 +
 +
- def combine_into_library(args, output_path, build_dir, target_os, object_files):
-   """Combine all the object files into a single .a/.lib file so it's easier to
-      give this to GN."""
-@@ -406,7 +455,7 @@ def get_third_party_locations():
+ def get_windows_settings(args):
+   """The Windows toolchain requires a lot of setup for cmake to use it.
+      This encapsulates all that setup.
+@@ -403,7 +459,7 @@ def get_third_party_locations():
      "-DTINT_BUILD_BENCHMARKS=OFF",
      "-DTINT_BUILD_IR_BINARY=OFF",
      "-DTINT_BUILD_TESTS=OFF",
