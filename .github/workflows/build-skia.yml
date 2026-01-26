@@ -335,9 +335,13 @@ jobs:
             -library build/mac-gpu/lib/Release/libSkia.a \
             -headers build/include \
             -library build/ios-gpu/lib/Release/device-arm64/libSkia.a \
+            -headers build/include \
             -library build/ios-gpu/lib/Release/simulator/libSkia.a \
+            -headers build/include \
             -library build/visionos-gpu/lib/Release/device-arm64/libSkia.a \
+            -headers build/include \
             -library build/visionos-gpu/lib/Release/simulator-arm64/libSkia.a \
+            -headers build/include \
             -output Skia.xcframework
 
       - name: Package XCFramework
