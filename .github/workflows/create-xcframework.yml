@@ -38,6 +38,25 @@ jobs:
           echo "Build directory structure:"
           find build -name "libSkia.a" | head -20
 
+      - name: Strip arm64e from libraries
+        run: |
+          # Strip arm64e slices to get cleaner XCFramework paths
+          # (e.g., ios-arm64_x86_64-simulator instead of ios-arm64_arm64e_x86_64-simulator)
+          strip_arm64e() {
+            local lib="$1"
+            if lipo -info "$lib" 2>/dev/null | grep -q "arm64e"; then
+              echo "Stripping arm64e from $lib"
+              # Get all architectures except arm64e
+              archs=$(lipo -info "$lib" | sed 's/.*: //' | tr ' ' '\n' | grep -v arm64e | tr '\n' ' ')
+              lipo "$lib" -extract $archs -output "${lib}.tmp"
+              mv "${lib}.tmp" "$lib"
+            fi
+          }
+
+          for lib in $(find build -name "libSkia.a"); do
+            strip_arm64e "$lib"
+          done
+
       - name: Create XCFramework
         run: |
           # Merge iOS simulator architectures into a single fat library
