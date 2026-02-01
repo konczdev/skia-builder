@@ -35,57 +35,57 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # - os: macos-latest
+          #   platform: mac
+          #   variant: gpu
+          #   arch: "universal"
           - os: macos-latest
             platform: mac
             variant: gpu
-            arch: "universal"
-          - os: macos-latest
-            platform: mac
-            variant: gpu
             arch: "arm64"
-          - os: macos-latest
-            platform: mac
-            variant: gpu
-            arch: "x86_64"
-          - os: macos-latest
-            platform: ios
-            variant: gpu
-            arch: "arm64"
-            target: "device"
-          - os: macos-latest
-            platform: ios
-            variant: gpu
-            arch: "arm64,x86_64"
-            target: "simulator"
-          - os: macos-latest
-            platform: visionos
-            variant: gpu
-            arch: "arm64"
-            target: "device"
-          - os: macos-latest
-            platform: visionos
-            variant: gpu
-            arch: "arm64"
-            target: "simulator"
+          # - os: macos-latest
+          #   platform: mac
+          #   variant: gpu
+          #   arch: "x86_64"
+          # - os: macos-latest
+          #   platform: ios
+          #   variant: gpu
+          #   arch: "arm64"
+          #   target: "device"
+          # - os: macos-latest
+          #   platform: ios
+          #   variant: gpu
+          #   arch: "arm64,x86_64"
+          #   target: "simulator"
+          # - os: macos-latest
+          #   platform: visionos
+          #   variant: gpu
+          #   arch: "arm64"
+          #   target: "device"
+          # - os: macos-latest
+          #   platform: visionos
+          #   variant: gpu
+          #   arch: "arm64"
+          #   target: "simulator"
           - os: windows-latest
             platform: win
             variant: gpu
             arch: x64
             config: Release
-          - os: windows-latest
-            platform: win
-            variant: gpu
-            arch: x64
-            config: Debug
+          # - os: windows-latest
+          #   platform: win
+          #   variant: gpu
+          #   arch: x64
+          #   config: Debug
           - os: ubuntu-latest
             platform: linux
             variant: gpu
             arch: x64
-          - os: ubuntu-latest
-            platform: wasm
-            variant: gpu
-            arch: "wasm32"
-            config: Release
+          # - os: ubuntu-latest
+          #   platform: wasm
+          #   variant: gpu
+          #   arch: "wasm32"
+          #   config: Release
 
           # ARM64 platforms (later)
           # - os: ubuntu-24.04-arm
@@ -285,7 +285,8 @@ jobs:
 
   create-xcframework:
     needs: build-skia
-    if: ${{ !inputs.skip_release && (inputs.platforms == 'all') }}
+    if: false  # Disabled - requires iOS/visionOS builds
+    # if: ${{ !inputs.skip_release && (inputs.platforms == 'all') }}
     runs-on: macos-latest
     steps:
       - name: Download macOS artifact
@@ -394,7 +395,7 @@ jobs:
 
   create-release:
     if: ${{ !inputs.skip_release && inputs.platforms == 'all' }}
-    needs: [build-skia, create-xcframework]
+    needs: [build-skia]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -410,17 +411,17 @@ jobs:
           draft: false
           prerelease: ${{ inputs.test_mode }}
           files: |
-            ./skia-build-mac-universal-gpu-release/skia-build-mac-universal-gpu-release.zip
             ./skia-build-mac-arm64-gpu-release/skia-build-mac-arm64-gpu-release.zip
-            ./skia-build-mac-x86_64-gpu-release/skia-build-mac-x86_64-gpu-release.zip
-            ./skia-build-ios-device-arm64-gpu-release/skia-build-ios-device-arm64-gpu-release.zip
-            ./skia-build-ios-simulator-arm64-x86_64-gpu-release/skia-build-ios-simulator-arm64-x86_64-gpu-release.zip
-            ./skia-build-visionos-device-arm64-gpu-release/skia-build-visionos-device-arm64-gpu-release.zip
-            ./skia-build-visionos-simulator-arm64-gpu-release/skia-build-visionos-simulator-arm64-gpu-release.zip
             ./skia-build-win-x64-gpu-release/skia-build-win-x64-gpu-release.zip
-            ./skia-build-win-x64-gpu-debug/skia-build-win-x64-gpu-debug.zip
             ./skia-build-linux-x64-gpu-release/skia-build-linux-x64-gpu-release.zip
-            ./skia-build-wasm-wasm32-gpu-release/skia-build-wasm-wasm32-gpu-release.zip
-            ./Skia.xcframework/Skia.xcframework.zip
+            # ./skia-build-mac-universal-gpu-release/skia-build-mac-universal-gpu-release.zip
+            # ./skia-build-mac-x86_64-gpu-release/skia-build-mac-x86_64-gpu-release.zip
+            # ./skia-build-ios-device-arm64-gpu-release/skia-build-ios-device-arm64-gpu-release.zip
+            # ./skia-build-ios-simulator-arm64-x86_64-gpu-release/skia-build-ios-simulator-arm64-x86_64-gpu-release.zip
+            # ./skia-build-visionos-device-arm64-gpu-release/skia-build-visionos-device-arm64-gpu-release.zip
+            # ./skia-build-visionos-simulator-arm64-gpu-release/skia-build-visionos-simulator-arm64-gpu-release.zip
+            # ./skia-build-win-x64-gpu-debug/skia-build-win-x64-gpu-debug.zip
+            # ./skia-build-wasm-wasm32-gpu-release/skia-build-wasm-wasm32-gpu-release.zip
+            # ./Skia.xcframework/Skia.xcframework.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
