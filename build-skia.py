@@ -225,6 +225,10 @@ PLATFORM_GN_ARGS = {
 
     "win": """
     skia_use_dawn = true
+    # Keep Direct3D enabled. M149 makes GrBackendFormatData::equal unconditionally
+    # pure virtual while GrD3DBackendFormatData's override is gated by GPU_TEST_UTILS,
+    # leaving the subclass abstract in Release builds. patches/fix_m149_d3d_backend_surface.patch
+    # ungates the override so D3D Release builds compile. Re-enable plain once Skia fixes upstream.
     skia_use_direct3d = true
     skia_use_vulkan = true
     is_trivial_abi = false
@@ -452,7 +456,7 @@ class SkiaBuildScript:
             "visionos": ["arm64"],
             "win": ["x64", "arm64", "Win32"],
             "linux": ["x64", "arm64"],
-            "wasm": ["wasm32"]
+            "wasm": ["wasm32"],
         }
         for arch in self.archs:
             if arch not in valid_archs[self.platform]:
@@ -623,6 +627,10 @@ class SkiaBuildScript:
         # On Windows, ninja expects targets without the .lib extension
         if self.platform == "win":
             libs_to_build = [lib[:-4] if lib.endswith('.lib') else lib for lib in libs_to_build]
+        # On wasm, M149+ outputs lib<name>.wasm.a (when is_canvaskit=false),
+        # so pass bare GN target names to ninja and rename at move_libs time.
+        elif self.platform == "wasm":
+            libs_to_build = [lib[3:-2] if lib.startswith('lib') and lib.endswith('.a') else lib for lib in libs_to_build]
         
         # Construct the ninja command with all library targets
         ninja_command = ["ninja", "-C", str(output_dir)] + libs_to_build
@@ -662,7 +670,11 @@ class SkiaBuildScript:
 
         # Copy the libraries
         for lib in LIBS[self.platform]:
-            src_file = src_dir / lib
+            # M149+ wasm toolchain emits lib<name>.wasm.a; copy to lib<name>.a for compatibility.
+            if self.platform == "wasm" and lib.endswith('.a'):
+                src_file = src_dir / f"{lib[:-2]}.wasm.a"
+            else:
+                src_file = src_dir / lib
             dest_file = dest_dir / lib
             if src_file.exists():
                 shutil.copy2(str(src_file), str(dest_file))

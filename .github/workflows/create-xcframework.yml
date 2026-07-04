@@ -13,9 +13,14 @@ on:
         type: boolean
         default: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   create-xcframework:
-    runs-on: macos-latest
+    runs-on: macos-15
+    permissions:
+      contents: write
     steps:
       - name: Download release artifacts
         env:
@@ -46,14 +51,12 @@ jobs:
             local lib="$1"
             if lipo -info "$lib" 2>/dev/null | grep -q "arm64e"; then
               echo "Stripping arm64e from $lib"
-              # Get all architectures except arm64e
-              archs=$(lipo -info "$lib" | sed 's/.*: //' | tr ' ' '\n' | grep -v arm64e | tr '\n' ' ')
-              lipo "$lib" -extract $archs -output "${lib}.tmp"
+              lipo "$lib" -remove arm64e -output "${lib}.tmp"
               mv "${lib}.tmp" "$lib"
             fi
           }
 
-          for lib in $(find build -name "libSkia.a"); do
+          find build -name "libSkia.a" -print0 | while IFS= read -r -d '' lib; do
             strip_arm64e "$lib"
           done
 
@@ -113,7 +116,7 @@ jobs:
             --clobber
 
       - name: Upload XCFramework artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Skia.xcframework
           path: Skia.xcframework.zip
