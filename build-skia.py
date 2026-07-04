@@ -190,6 +190,12 @@ skia_enable_svg = true
 skia_enable_skottie = true
 skia_enable_pdf = true
 skia_enable_skparagraph = true
+
+# m151 defaults this to true for clang builds, pulling in Chromium's
+# partition_alloc (allocator_base/core/shim + raw_ptr libs). Disable it like
+# Skia's own non-Chromium distributions (Android gn_to_bp, SKQP) so consumers
+# don't need extra libs and no allocator shim is linked into host processes.
+skia_use_partition_alloc = false
 """
 
 # Platform-specific GN args
