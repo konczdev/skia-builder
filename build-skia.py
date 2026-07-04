@@ -1181,8 +1181,10 @@ class SkiaBuildScript:
             colored_print(f"Applying patch: {patch_file.name}", Colors.OKBLUE)
             try:
                 # Check if patch is already applied
+                # --ignore-whitespace: patch files may be checked out with CRLF
+                # on Windows (core.autocrlf) while Skia sources are LF.
                 result = subprocess.run(
-                    ["git", "apply", "--check", "--reverse", str(patch_file)],
+                    ["git", "apply", "--check", "--reverse", "--ignore-whitespace", str(patch_file)],
                     capture_output=True, text=True
                 )
                 if result.returncode == 0:
@@ -1190,7 +1192,7 @@ class SkiaBuildScript:
                     continue
 
                 # Apply the patch
-                subprocess.run(["git", "apply", str(patch_file)], check=True)
+                subprocess.run(["git", "apply", "--ignore-whitespace", str(patch_file)], check=True)
                 colored_print(f"  Applied {patch_file.name} successfully.", Colors.OKGREEN)
             except subprocess.CalledProcessError as e:
                 colored_print(f"  Warning: Failed to apply {patch_file.name}: {e}", Colors.WARNING)
