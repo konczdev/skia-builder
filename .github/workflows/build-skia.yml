@@ -95,11 +95,14 @@ jobs:
           #   platform: linux
           #   variant: gpu
           #   arch: arm64
+          # experimental: failure does not fail the workflow or block create-release
+          # (currently broken: Skia bin/fetch-gn has no windows-arm64 GN binary)
           - os: windows-11-arm
             platform: win
             variant: gpu
             arch: arm64
             config: Release
+            experimental: true
           # CPU variants
           # - os: macos-15
           #   platform: mac
@@ -122,6 +125,7 @@ jobs:
           #   variant: cpu
           #   arch: ""
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental || false }}
     env:
       SKIA_BRANCH: ${{ inputs.skia_branch || 'chrome/m151' }}
     outputs:
