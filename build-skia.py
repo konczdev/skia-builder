@@ -1218,6 +1218,24 @@ if (skia_use_angle) {
                 zf.extractall(gn_dir)
 
             colored_print(f"GN downloaded to {gn_path}", Colors.OKGREEN)
+
+            # git-sync-deps re-runs bin/fetch-gn on its own, and that loader
+            # 404s on windows-arm64 (Skia publishes no arm64 GN binary). The
+            # x64 gn.exe placed above works under emulation, so neutralize the
+            # hook. setup_skia_repo's reset --hard restores the original file
+            # each run, which is why the stub is rewritten here every time.
+            fetch_gn = SKIA_SRC_DIR / "bin" / "fetch-gn"
+            fetch_gn.write_text(
+                "#!/usr/bin/env python3\n"
+                "# Stubbed by skia-builder on windows-arm64: the checked-in\n"
+                "# loader 404s (no arm64 GN published); x64 gn.exe is already\n"
+                "# in place and runs under emulation.\n"
+                "import sys\n"
+                "sys.exit(0)\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            colored_print("Stubbed bin/fetch-gn (git-sync-deps would 404 on arm64)", Colors.OKGREEN)
         except Exception as e:
             colored_print(f"Warning: Failed to download GN: {e}", Colors.WARNING)
 
