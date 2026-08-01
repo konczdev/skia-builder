@@ -208,12 +208,32 @@ jobs:
         if: steps.check.outputs.should_build == 'true'
         run: git config --global init.defaultBranch main
 
-      - name: Install LLVM and Clang
-        if: steps.check.outputs.should_build == 'true' && runner.os != 'macOS' && matrix.os != 'windows-11-arm'
+      - name: Install LLVM and Clang (Linux)
+        if: steps.check.outputs.should_build == 'true' && runner.os == 'Linux'
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: "22.1.8"
+          # force-url: the action's assets.json lags new LLVM releases; pin the
+          # exact release asset so the version is deterministic.
+          force-url: "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-Linux-X64.tar.xz"
           env: true
+
+      # Windows x64 installs the official NSIS package into C:\Program Files\LLVM —
+      # the path build-skia.py's clang_win probe checks FIRST. The install action
+      # extracts into the tool cache instead, so with it the build silently used the
+      # runner image's preinstalled LLVM; the direct install pins the real version.
+      - name: Install LLVM and Clang (Windows x64)
+        if: steps.check.outputs.should_build == 'true' && runner.os == 'Windows' && matrix.os != 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $llvmUrl = "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe"
+          $installerPath = "$env:TEMP\llvm-installer.exe"
+          Write-Host "Downloading LLVM installer..."
+          Invoke-WebRequest -Uri $llvmUrl -OutFile $installerPath
+          Write-Host "Installing LLVM silently..."
+          Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
+          & "C:\Program Files\LLVM\bin\clang-cl.exe" --version
+          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install LLVM and Clang (Windows ARM64)
         if: steps.check.outputs.should_build == 'true' && matrix.os == 'windows-11-arm'
