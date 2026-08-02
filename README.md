@@ -91,6 +91,16 @@ py -3 build-skia.py -config Release -branch chrome/m129 -crt MD win
 
 In CI, MD builds are published as separate zips: `skia-build-win-x64-gpu-md-release.zip` and `skia-build-win-x64-gpu-md-debug.zip` (the existing MT artifact names are unchanged).
 
+### Tracing flavor (diagnostics builds)
+
+Official release builds compile every Skia `TRACE_EVENT` macro to nothing (`skia_disable_tracing` defaults to `is_official_build`). Pass `--tracing` to build a diagnostics flavor that is identical to the release configuration except for a single override, `skia_disable_tracing = false`: the trace call sites are compiled in, but they stay dormant until the consuming application installs a tracer through `SkEventTracer::SetInstance` at runtime. Because the build is otherwise a fully optimized official build with the same CRT, its performance and memory behavior match the release libraries closely enough for profiling work — unlike a Debug build, which is unoptimized.
+
+Tracing builds are output to their own directory tree (for example `build/win-gpu-tracing/lib/`) so the release output is untouched. This flavor is meant for local diagnostics only; CI does not build or publish it.
+
+```bash
+py -3 build-skia.py -branch chrome/m152 --tracing win
+```
+
 ### ANGLE
 
 Windows GPU builds enable ANGLE (`skia_use_angle=true`). The Windows packages include `libEGL.dll`/`libGLESv2.dll` and their import libs (`libEGL.dll.lib`/`libGLESv2.dll.lib`) alongside the Skia libraries, plus the ANGLE headers (EGL, GLES2/3, KHR) under `include/angle/` — add that directory to your include paths to use `<EGL/egl.h>` etc. The ANGLE DLLs are self-contained, so the same DLLs work with both MT and MD packages.

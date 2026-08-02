@@ -408,6 +408,7 @@ class SkiaBuildScript:
         self.variant = "gpu"
         self.target = "all"  # device, simulator, or all
         self.crt = "MT"  # Windows CRT linkage: MT (static) or MD (dynamic)
+        self.tracing = False  # Diagnostics flavor: Release + skia_disable_tracing=false
 
     def parse_arguments(self):
         parser = argparse.ArgumentParser(description="Build Skia for macOS, iOS, visionOS, Windows, Linux and WebAssembly")
@@ -422,6 +423,11 @@ class SkiaBuildScript:
                            help="Build target for iOS/visionOS: device, simulator, or all")
         parser.add_argument("-crt", choices=["MT", "MD"], default="MT",
                            help="Windows CRT linkage: MT (static, default) or MD (dynamic). No effect on other platforms")
+        parser.add_argument("--tracing", action="store_true",
+                           help="Diagnostics flavor: identical Release configuration plus skia_disable_tracing=false "
+                                "(TRACE_EVENT call sites compiled in, activated only when a tracer is installed at "
+                                "runtime). Outputs to <platform>-<variant>-tracing/ so release libs are untouched. "
+                                "Local diagnostics use only - not published by CI")
         parser.add_argument("--shallow", action="store_true", help="Perform a shallow clone of the Skia repository")
         parser.add_argument("--zip-all", action="store_true",
                            help="Create a zip archive containing all platform libraries")
@@ -449,6 +455,12 @@ class SkiaBuildScript:
         if self.crt == "MD" and self.platform != "win":
             colored_print("Warning: -crt MD only affects Windows; ignoring.", Colors.WARNING)
             self.crt = "MT"
+        self.tracing = args.tracing
+        if self.tracing and self.config == "Debug":
+            # Debug already compiles tracing in (skia_disable_tracing rides is_official_build),
+            # and the separate output dir would suggest a third flavor that does not exist.
+            colored_print("Warning: --tracing is redundant with -config Debug; ignoring.", Colors.WARNING)
+            self.tracing = False
         self.shallow_clone = args.shallow
         self.create_zip_all = args.zip_all
         self.strip_arm64e = args.strip_arm64e
@@ -487,6 +499,8 @@ class SkiaBuildScript:
         name = f"{self.platform}_{self.config}_{arch}_{self.variant}"
         if self.platform == "win" and self.crt == "MD":
             name += "_md"
+        if self.tracing:
+            name += "_tracing"
         return TMP_DIR / name
 
     def win_angle_enabled(self, arch):
@@ -498,6 +512,8 @@ class SkiaBuildScript:
         variant_suffix = f"-{self.variant}"
         if platform == "win" and self.crt == "MD":
             variant_suffix += "-md"
+        if self.tracing:
+            variant_suffix += "-tracing"
         if platform == "mac":
             return BASE_DIR / f"mac{variant_suffix}" / "lib"
         elif platform == "ios":
@@ -539,6 +555,14 @@ class SkiaBuildScript:
         else:
             gn_args += "is_debug = false\n"
             gn_args += "is_official_build = true\n"
+
+        if self.tracing:
+            # Diagnostics flavor: the only delta from the release configuration.
+            # skia_disable_tracing defaults to is_official_build, so official builds
+            # compile every TRACE_EVENT macro to nothing; this override compiles the
+            # call sites in. They stay dormant (default no-op tracer) until a consumer
+            # installs one via SkEventTracer::SetInstance at runtime.
+            gn_args += "skia_disable_tracing = false\n"
 
         if self.platform == "mac":
             gn_args += f"target_cpu = \"{arch}\""
@@ -1251,6 +1275,8 @@ if (skia_use_angle) {
         target_cpu = "{arch}"
         variant = "{self.variant}"
         """
+        if self.tracing:
+            gn_args += "skia_disable_tracing = false\n"
         if self.platform == "win":
             gn_args += f'crt = "{self.crt}"\n'
         # Remove leading whitespace from each line while preserving structure
