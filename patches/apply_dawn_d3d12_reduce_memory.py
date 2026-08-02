@@ -19,6 +19,21 @@ deletions reach the recycle pool, then free every pooled heap. It also
 moves FreeRecycledAllocations() to the manager's public section, the
 visibility its Vulkan sibling already has.
 
+v2: freeing a pooled heap re-parks it — HeapAllocator::DeallocateResourceHeap
+routes through Device::ReferenceUntilUnused, which AddRefs the ID3D12Heap
+into mUsedComObjectRefs at the PENDING command serial, and the only
+release site (TickImpl's ClearUpTo) sits behind a scheduled-commands
+guard that is false on an idle queue. So v1's last trim of an idle
+sequence stranded exactly what it had just freed until some future
+present submitted and ticked (measured: ~30 MB tails surviving every
+frameless cleanup pass; the Vulkan sibling avoids this by calling its
+TickImpl). v2 clears the ref queue up to the completed serial inside the
+override — refs parked by a PREVIOUS pass are released by the next one,
+converging under the caller's documented retry contract — and replaces
+the queue-busy return with an honest pending-work predicate (parked refs
+or in-flight serials), so the caller keeps retrying exactly while
+something is actually left.
+
 Retire when upstream implements a D3D12 ReduceMemoryUsageImpl of its
 own (crbug.com/398193014 tracks follow-up work in this area).
 """
@@ -84,8 +99,39 @@ def patch_device_source(dawn_native: Path) -> bool:
 	source = dawn_native / "d3d12" / "DeviceD3D12.cpp"
 	content = source.read_text()
 
+	v1_tail = (
+		"    (*mResourceAllocatorManager)->FreeRecycledAllocations();\n"
+		"    return completedSerial < queue->GetLastSubmittedCommandSerial();\n"
+	)
+	v2_tail = (
+		"    (*mResourceAllocatorManager)->FreeRecycledAllocations();\n"
+		"    // FreeRecycledAllocations RE-PARKS what it frees: DeallocateResourceHeap\n"
+		"    // routes each heap through ReferenceUntilUnused, which AddRefs it into\n"
+		"    // mUsedComObjectRefs at the PENDING serial — and the only other release\n"
+		"    // site (TickImpl's ClearUpTo) sits behind a scheduled-commands guard\n"
+		"    // that an idle queue never passes. Clear up to the completed serial\n"
+		"    // here: refs parked by a previous pass are released by this one, so\n"
+		"    // repeated passes converge instead of stranding the last batch.\n"
+		"    mUsedComObjectRefs->ClearUpTo(completedSerial);\n"
+		"    // Honest pending-work answer: parked refs or in-flight serials — not\n"
+		"    // the queue-busy proxy, which reads false exactly when the newest\n"
+		"    // parked batch is maximally un-drainable.\n"
+		"    return !mUsedComObjectRefs->Empty() ||\n"
+		"           completedSerial < queue->GetLastSubmittedCommandSerial();\n"
+	)
+
+	if v2_tail in content:
+		print("  DeviceD3D12.cpp already patched (v2)")
+		return True
+
 	if "ReduceMemoryUsageImpl" in content:
-		print("  DeviceD3D12.cpp already patched")
+		# v1 body present — upgrade its tail in place.
+		if v1_tail not in content:
+			print("  Error: v1 body present but its tail anchor not found in DeviceD3D12.cpp")
+			return False
+		content = content.replace(v1_tail, v2_tail, 1)
+		source.write_text(content)
+		print("  Patched DeviceD3D12.cpp (upgraded ReduceMemoryUsageImpl v1 -> v2)")
 		return True
 
 	anchor = "MaybeError Device::TickImpl() {\n"
@@ -115,14 +161,13 @@ def patch_device_source(dawn_native: Path) -> bool:
 		"    }\n"
 		"    ExecutionSerial completedSerial = queue->GetCompletedCommandSerial();\n"
 		"    (*mResourceAllocatorManager)->Tick(completedSerial);\n"
-		"    (*mResourceAllocatorManager)->FreeRecycledAllocations();\n"
-		"    return completedSerial < queue->GetLastSubmittedCommandSerial();\n"
-		"}\n"
+		+ v2_tail
+		+ "}\n"
 		"\n"
 	)
 	content = content.replace(anchor, body + anchor, 1)
 	source.write_text(content)
-	print("  Patched DeviceD3D12.cpp (ReduceMemoryUsageImpl body)")
+	print("  Patched DeviceD3D12.cpp (ReduceMemoryUsageImpl body, v2)")
 	return True
 
 
