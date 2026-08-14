@@ -33,6 +33,9 @@ directory is therefore not the complete local-modification story — grep
 Grep the build log for these exact lines (one per patched file, plus the
 script's own success line):
 
+- `apply_dawn_d3d12_bounded_acquire.py` →
+  `Patched QueueD3D12.cpp (bounded WaitForSerial + SetEventOnCompletion HRESULT check)`
+  (or `QueueD3D12.cpp already patched` on a re-run).
 - `apply_dawn_d3d12_reduce_memory.py` →
   `Patched ResourceAllocatorManagerD3D12.h (FreeRecycledAllocations public)`,
   `Patched DeviceD3D12.h (ReduceMemoryUsageImpl declaration)`,
@@ -51,6 +54,37 @@ libraries and then both flavors — a tracing DLL built against stale
 libraries silently lacks the patch.
 
 ## The patches
+
+### apply_dawn_d3d12_bounded_acquire.py — ours, 2026-08-14
+
+**What:** bounds `d3d12::Queue::WaitForSerial` — ten one-second slices with
+a `CheckPassedSerials()` between them, an early return the moment the serial
+completes, and `DAWN_INTERNAL_ERROR` when the whole budget expires — and
+makes `Queue::SetEventOnCompletion` check and log the HRESULT it used to
+discard. One file: `QueueD3D12.cpp`.
+
+**Why:** upstream waits once with an infinite timeout, and every escape from
+that wait sits downstream of it. The device-removal sentinel
+(`GetCompletedValue() == UINT64_MAX`) is only read after the wait returns,
+and an arming call that failed leaves a manual-reset event unsignaled for
+the rest of the process — so the wait has states it never leaves. Measured:
+a render thread RUNNABLE-in-native inside the swap chain's
+`GetCurrentTexture` on a WARP-saturated run, window frozen, no error ever
+produced and therefore nothing for device-loss recovery to classify. The
+budget expiry is deliberately destructive: `DeviceBase::HandleError`
+promotes the internal error to a device loss, which turns a permanent park
+into one recovery stutter. The bound also reaches `WaitForSerial`'s other
+callers (`DetachAndWaitForDeallocation`, `WaitForIdleForDestructionImpl`,
+`OpenPendingCommands`), so a teardown that would hang forever on a dead
+fence becomes a device-lost error instead — intended.
+
+**Symptom if silently missing:** a wedged fence parks the calling thread
+forever again; on the render worker that is a frozen window with a live
+process, and no classification, no recovery, and no log line anywhere.
+
+**Retire when:** upstream bounds the wait itself or checks the arming
+HRESULT. Check on every milestone bump — if the anchors stop matching,
+confirm whether upstream grew either fix before re-anchoring.
 
 ### apply_dawn_d3d12_reduce_memory.py — ours, 2026-08-02 (v2 same day)
 
