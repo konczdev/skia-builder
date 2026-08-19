@@ -8,7 +8,7 @@ on:
         description: 'Skia branch to build (e.g., chrome/m144)'
         required: false
         type: string
-        default: 'chrome/m152'
+        default: 'chrome/m153'
       platforms:
         description: 'Platforms to build (comma-separated, or "all")'
         required: false
@@ -26,7 +26,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.skia_branch || 'chrome/m152' }}-${{ inputs.platforms || 'all' }}-${{ inputs.skip_release && 'skip-release' || 'release' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.skia_branch || 'chrome/m153' }}-${{ inputs.platforms || 'all' }}-${{ inputs.skip_release && 'skip-release' || 'release' }}
   cancel-in-progress: true
 
 env:
@@ -140,7 +140,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental || false }}
     env:
-      SKIA_BRANCH: ${{ inputs.skia_branch || 'chrome/m152' }}
+      SKIA_BRANCH: ${{ inputs.skia_branch || 'chrome/m153' }}
     outputs:
       skia_branch: ${{ steps.skia_branch.outputs.skia_branch }}
     steps:
