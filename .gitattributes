@@ -1,1 +1,13 @@
+# Repo-defined line-ending policy: all text files are stored with LF and
+# materialize as LF in the working tree, independent of each contributor's
+# core.autocrlf setting.
+* text=auto eol=lf
+
+# Windows batch scripts must be CRLF in the working tree (cmd.exe parses
+# labels/goto incorrectly in LF-only files).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Patches must stay byte-exact LF regardless of platform: git apply fails
+# when hunk line endings do not match the LF upstream sources.
 patches/*.patch text eol=lf
