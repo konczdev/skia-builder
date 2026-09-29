@@ -24,7 +24,9 @@ Two edits, both in src/dawn/native/d3d12/QueueD3D12.cpp:
 
 1. WaitForSerial waits in ten one-second slices instead of once forever,
    calling CheckPassedSerials() after each slice so a removal that happens
-   mid-wait surfaces as Dawn's own DAWN_DEVICE_LOST_ERROR, and returning
+   mid-wait surfaces as Dawn's own device-lost error
+   (DAWN_BACKEND_DEVICE_LOST_ERROR, named DAWN_DEVICE_LOST_ERROR before
+   m156's Dawn), and returning
    early as soon as the serial completes. Exhausting the budget returns
    DAWN_INTERNAL_ERROR, which DeviceBase::HandleError promotes to a device
    loss — so the consequence of a hung fence becomes the ordinary
