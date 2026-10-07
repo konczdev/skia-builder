@@ -43,15 +43,24 @@ script's own success line):
   (or the corresponding `already patched` lines on a re-run).
 - `apply_dawn_disable_cxx_modules.py` →
   `Patched build_dawn.py (disable dawncpp_module)` / `already patched`.
+- `apply_dawn_dxc_option.py` →
+  `Patched args.gni (dawn_enable_dxc)`, `Patched BUILD.gn (dawn_enable_dxc)`,
+  `Patched build_dawn.py (dawn_enable_dxc)` (or `already patched
+  (dawn_enable_dxc)` per file on a re-run). On a `--dxc` build, also check
+  that `cmake_dawn/CMakeCache.txt` in the `_dxc` tmp dir carries
+  `-DDAWN_USE_BUILT_DXC` in `CMAKE_CXX_FLAGS` while
+  `DAWN_USE_BUILT_DXC:BOOL` stays `OFF` (the define without the source
+  build).
 - `apply_dawn_ios_visionos.py` → `Patched args.gni`, `Patched BUILD.gn`,
   `Patched build_dawn.py`, `Patched cmake_utils.py` (Apple targets; on a
   Windows-only build these files are still patched — the edits are inert
   off-Apple).
 
-Downstream reminder: the produced Skia/Dawn libraries feed BOTH skia-gleam
-DLL flavors (normal and tracing). After changing any patch, rebuild the
-libraries and then both flavors — a tracing DLL built against stale
-libraries silently lacks the patch.
+Downstream reminder: the produced Skia/Dawn libraries feed EVERY skia-gleam
+DLL flavor (normal, tracing, and the local DXC experiment). After changing
+any patch, rebuild the libraries of each flavor in use and then those
+DLLs — a flavor DLL built against stale libraries silently lacks the
+patch.
 
 ## The patches
 
@@ -133,6 +142,31 @@ the dawncpp_module import-graph error; no libraries are produced at all
 **Retire when:** CMake learns clang-cl module scanning, or Dawn's probe
 starts detecting the CMake+clang-cl combination itself. Re-test by
 removing the patch on a milestone bump and watching the generate step.
+
+### apply_dawn_dxc_option.py — ours, 2026-10-07
+
+**What:** adds a `dawn_enable_dxc` GN arg (Skia's `third_party/dawn`
+`args.gni`, default false), passes it to Skia's Dawn bridge (`BUILD.gn`),
+and there appends `-DDAWN_USE_BUILT_DXC` to Dawn's C/C++ flags on Windows
+(`build_dawn.py`). Only `build-skia.py --dxc` sets the arg; without it
+the edits are inert.
+
+**Why:** Dawn compiles every line of its D3D12 DXC path, and the D3D12
+features that need shader model 6 (ShaderF16, Subgroups,
+SubgroupSizeControl, AtomicVec2uMinMax), only under that macro, and
+defines it only together with building DXC from source. Dawn never links
+DXC: it opens `dxcompiler.dll` at device creation, and the DXC types come
+from the Windows SDK's `dxcapi.h`, which every build already includes. The
+define alone therefore gives a Dawn whose `use_dxc` toggle selects DXC or
+FXC at runtime. Measured on the warmup thread of a serial pipeline warmup
+(RTX 5060 Ti, warm driver cache): FXC took 92.5% of its 17 s.
+
+**Symptom if silently missing:** a `--dxc` build is an FXC-only build
+again: skia-gleam devices report FXC under the automatic choice, and a
+device that requires DXC refuses to be created.
+
+**Retire when:** Skia's Dawn bridge grows its own DXC option, or the
+default build adopts DXC (then the arg's default flips instead).
 
 ### apply_dawn_ios_visionos.py — fork origin, January 2026
 

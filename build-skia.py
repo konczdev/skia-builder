@@ -409,6 +409,7 @@ class SkiaBuildScript:
         self.target = "all"  # device, simulator, or all
         self.crt = "MT"  # Windows CRT linkage: MT (static) or MD (dynamic)
         self.tracing = False  # Diagnostics flavor: Release + skia_disable_tracing=false
+        self.dxc = False  # Experimental flavor: Dawn's DXC code path compiled in (dawn_enable_dxc)
 
     def parse_arguments(self):
         parser = argparse.ArgumentParser(description="Build Skia for macOS, iOS, visionOS, Windows, Linux and WebAssembly")
@@ -428,6 +429,11 @@ class SkiaBuildScript:
                                 "(TRACE_EVENT call sites compiled in, activated only when a tracer is installed at "
                                 "runtime). Outputs to <platform>-<variant>-tracing/ so release libs are untouched. "
                                 "Local diagnostics use only - not published by CI")
+        parser.add_argument("--dxc", action="store_true",
+                           help="Experimental Windows flavor: Dawn's D3D12 backend compiled with its DXC code path "
+                                "(dawn_enable_dxc = true, see patches/apply_dawn_dxc_option.py), so the use_dxc "
+                                "toggle can select DXC at runtime; dxcompiler.dll must sit beside the consuming "
+                                "DLL. Outputs to win-<variant>-dxc/ so release libs are untouched. Local use only")
         parser.add_argument("--shallow", action="store_true", help="Perform a shallow clone of the Skia repository")
         parser.add_argument("--zip-all", action="store_true",
                            help="Create a zip archive containing all platform libraries")
@@ -461,6 +467,11 @@ class SkiaBuildScript:
             # and the separate output dir would suggest a third flavor that does not exist.
             colored_print("Warning: --tracing is redundant with -config Debug; ignoring.", Colors.WARNING)
             self.tracing = False
+        self.dxc = args.dxc
+        if self.dxc and self.platform != "win":
+            # DXC is the D3D12 backend's compiler; no other platform builds that backend.
+            colored_print("Warning: --dxc only affects Windows; ignoring.", Colors.WARNING)
+            self.dxc = False
         self.shallow_clone = args.shallow
         self.create_zip_all = args.zip_all
         self.strip_arm64e = args.strip_arm64e
@@ -501,6 +512,8 @@ class SkiaBuildScript:
             name += "_md"
         if self.tracing:
             name += "_tracing"
+        if self.dxc:
+            name += "_dxc"
         return TMP_DIR / name
 
     def win_angle_enabled(self, arch):
@@ -514,6 +527,8 @@ class SkiaBuildScript:
             variant_suffix += "-md"
         if self.tracing:
             variant_suffix += "-tracing"
+        if self.dxc:
+            variant_suffix += "-dxc"
         if platform == "mac":
             return BASE_DIR / f"mac{variant_suffix}" / "lib"
         elif platform == "ios":
@@ -563,6 +578,11 @@ class SkiaBuildScript:
             # call sites in. They stay dormant (default no-op tracer) until a consumer
             # installs one via SkEventTracer::SetInstance at runtime.
             gn_args += "skia_disable_tracing = false\n"
+
+        if self.dxc:
+            # The flavor's only delta: Dawn's DXC code path is compiled in, which
+            # makes the use_dxc toggle selectable at runtime.
+            gn_args += "dawn_enable_dxc = true\n"
 
         if self.platform == "mac":
             gn_args += f"target_cpu = \"{arch}\""
@@ -1277,6 +1297,8 @@ if (skia_use_angle) {
         """
         if self.tracing:
             gn_args += "skia_disable_tracing = false\n"
+        if self.dxc:
+            gn_args += "dawn_enable_dxc = true\n"
         if self.platform == "win":
             gn_args += f'crt = "{self.crt}"\n'
         # Remove leading whitespace from each line while preserving structure

@@ -26,6 +26,7 @@ python3 build-skia.py xcframework                  # Apple XCFramework (macOS + 
 # Options
 python3 build-skia.py <platform> -config Debug    # Debug build (default: Release)
 python3 build-skia.py <platform> --tracing        # Diagnostics flavor: Release + skia_disable_tracing=false, outputs to <platform>-<variant>-tracing/ (local only, never published by CI)
+python3 build-skia.py win --dxc                   # Experimental flavor: Dawn's DXC code path compiled in (dawn_enable_dxc), outputs to win-<variant>-dxc/ (local only)
 python3 build-skia.py <platform> -branch chrome/m130  # Specific Skia branch
 python3 build-skia.py <platform> --shallow        # Shallow clone
 python3 build-skia.py <platform> -archs x86_64,arm64  # Specific architectures
@@ -67,6 +68,7 @@ build/
 ├── win-gpu/lib/       # Windows libraries (/MT static CRT; incl. ANGLE DLLs + import libs)
 ├── win-gpu-md/lib/    # Windows libraries (/MD dynamic CRT, built with -crt MD)
 ├── win-gpu-tracing/lib/ # Windows diagnostics flavor (--tracing: Release + skia_disable_tracing=false; local only)
+├── win-gpu-dxc/lib/   # Windows DXC flavor (--dxc: Dawn can compile shaders with DXC; local only)
 ├── linux/lib/         # Linux libraries
 ├── wasm/lib/          # WASM libraries
 └── xcframework/       # XCFramework output
@@ -78,6 +80,7 @@ build/
 - `EXCLUDE_DEPS` lists Skia dependencies to skip during sync
 - `-crt {MT,MD}` selects the Windows CRT linkage (default MT). MD outputs to `win-gpu-md/` dirs and CI publishes them as `skia-build-win-x64-gpu-md-*.zip`. `patch_dawn_crt_runtime()` rewrites Skia's `third_party/dawn/cmake_utils.py` (MultiThreaded vs MultiThreadedDLL) to match, bidirectionally, since the checkout is shared between MT/MD builds
 - `--tracing` builds the diagnostics flavor: the exact Release configuration plus `skia_disable_tracing = false` (TRACE_EVENT call sites compiled in, dormant until a tracer is installed via `SkEventTracer::SetInstance`). Output goes to `<platform>-<variant>-tracing/` dirs and a `_tracing`-suffixed tmp dir, so release outputs and their ninja trees are untouched. Redundant with `-config Debug` (Debug already compiles tracing in) and ignored there. Local diagnostics use only — CI never builds or publishes it
+- `--dxc` (Windows only) builds the DXC flavor: the exact Release configuration plus `dawn_enable_dxc = true`, a GN arg `patches/apply_dawn_dxc_option.py` adds, which compiles Dawn with `-DDAWN_USE_BUILT_DXC` so its D3D12 backend can compile shaders with DXC as well as FXC (the `use_dxc` toggle chooses at runtime). DXC itself is not built: Dawn opens `dxcompiler.dll` at device creation, from the folder of the module it is linked into, and it must sign its own output (DXC 1.9 or newer; the Windows SDK's 1.7 does not). Output goes to `win-<variant>-dxc/` and a `_dxc`-suffixed tmp dir; combines with `--tracing` (suffix `-tracing-dxc`). Local use only
 - Windows GPU builds enable ANGLE (`skia_use_angle=true`, except arm64 where GL is off). `libEGL.dll`/`libGLESv2.dll` + import libs are copied next to the Skia libs; ANGLE headers are packaged to `build/include/angle/`
 
 ## visionOS Support
