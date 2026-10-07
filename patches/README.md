@@ -46,8 +46,8 @@ script's own success line):
 - `apply_dawn_dxc_option.py` →
   `Patched args.gni (dawn_enable_dxc)`, `Patched BUILD.gn (dawn_enable_dxc)`,
   `Patched build_dawn.py (dawn_enable_dxc)` (or `already patched
-  (dawn_enable_dxc)` per file on a re-run). On a `--dxc` build, also check
-  that `cmake_dawn/CMakeCache.txt` in the `_dxc` tmp dir carries
+  (dawn_enable_dxc)` per file on a re-run). On a Windows build, also check
+  that the tmp dir's `cmake_dawn/CMakeCache.txt` carries
   `-DDAWN_USE_BUILT_DXC` in `CMAKE_CXX_FLAGS` while
   `DAWN_USE_BUILT_DXC:BOOL` stays `OFF` (the define without the source
   build).
@@ -57,7 +57,7 @@ script's own success line):
   off-Apple).
 
 Downstream reminder: the produced Skia/Dawn libraries feed EVERY skia-gleam
-DLL flavor (normal, tracing, and the local DXC experiment). After changing
+DLL flavor (normal and tracing). After changing
 any patch, rebuild the libraries of each flavor in use and then those
 DLLs — a flavor DLL built against stale libraries silently lacks the
 patch.
@@ -146,10 +146,10 @@ removing the patch on a milestone bump and watching the generate step.
 ### apply_dawn_dxc_option.py — ours, 2026-10-07
 
 **What:** adds a `dawn_enable_dxc` GN arg (Skia's `third_party/dawn`
-`args.gni`, default false), passes it to Skia's Dawn bridge (`BUILD.gn`),
+`args.gni`, default `is_win`), passes it to Skia's Dawn bridge (`BUILD.gn`),
 and there appends `-DDAWN_USE_BUILT_DXC` to Dawn's C/C++ flags on Windows
-(`build_dawn.py`). Only `build-skia.py --dxc` sets the arg; without it
-the edits are inert.
+(`build_dawn.py`). The arg defaults to `is_win`, so every Windows build
+carries the DXC path; other platforms never build the D3D12 backend.
 
 **Why:** Dawn compiles every line of its D3D12 DXC path, and the D3D12
 features that need shader model 6 (ShaderF16, Subgroups,
@@ -161,12 +161,12 @@ define alone therefore gives a Dawn whose `use_dxc` toggle selects DXC or
 FXC at runtime. Measured on the warmup thread of a serial pipeline warmup
 (RTX 5060 Ti, warm driver cache): FXC took 92.5% of its 17 s.
 
-**Symptom if silently missing:** a `--dxc` build is an FXC-only build
+**Symptom if silently missing:** a Windows build is an FXC-only build
 again: skia-gleam devices report FXC under the automatic choice, and a
 device that requires DXC refuses to be created.
 
-**Retire when:** Skia's Dawn bridge grows its own DXC option, or the
-default build adopts DXC (then the arg's default flips instead).
+**Retire when:** Skia's Dawn bridge grows its own DXC option, or GleamUI
+stops shipping the D3D12 backend.
 
 ### apply_dawn_ios_visionos.py — fork origin, January 2026
 
