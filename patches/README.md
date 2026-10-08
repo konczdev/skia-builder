@@ -55,6 +55,12 @@ script's own success line):
   `Patched build_dawn.py`, `Patched cmake_utils.py` (Apple targets; on a
   Windows-only build these files are still patched — the edits are inert
   off-Apple).
+- `apply_skia_graphite_deferred_canvas_props.py` →
+  `Patched Recorder.h (makeDeferredCanvas with SkSurfaceProps)`,
+  `Patched Recorder.cpp (makeDeferredCanvas with SkSurfaceProps)` (or the
+  `already patched` forms on a re-run). A Skia without it fails loudly
+  downstream: skia-gleam's `skg_recorder_make_deferred_canvas` calls the
+  three-argument overload and does not compile against an unpatched header.
 
 Downstream reminder: the produced Skia/Dawn libraries feed EVERY skia-gleam
 DLL flavor (normal and tracing). After changing
@@ -186,6 +192,33 @@ mobile builds would select the wrong SDK / miss the simulator flag.
 
 **Retire when:** the fork's Apple-mobile support is formally dropped, or
 upstream Dawn grows native visionOS target support.
+
+### apply_skia_graphite_deferred_canvas_props.py — ours, 2026-10-08
+
+**What:** adds `Recorder::makeDeferredCanvas(const SkImageInfo&, const
+TextureInfo&, const SkSurfaceProps&)` and passes the properties to the
+deferred canvas's device; the two-argument form forwards with
+`SkSurfaceProps()`, so it behaves exactly as before. Two files:
+`include/gpu/graphite/Recorder.h` and `src/gpu/graphite/Recorder.cpp`. The
+only patch here that changes Skia itself rather than Dawn or the build.
+
+**Why:** a deferred canvas records into a texture that a surface supplies
+when the recording is inserted, and upstream makes its device with default
+surface properties, which the caller cannot change. Its text then takes
+Skia's stock contrast, gamma and pixel geometry instead of those of the
+surface it lands on. GleamUI draws a heavy frame on several threads, each
+into a deferred canvas whose recording the render thread inserts into the
+window's scene texture in paint order; with default properties 27,816
+pixels of MotionMark's Design frame differed from drawing it directly (up
+to 5 levels, all text), with the scene's none (gleamui-measurements
+`render-perf/2026-10-08-deferred-slices`).
+
+**Symptom if silently missing:** skia-gleam does not compile (it calls the
+new overload). Were skia-gleam changed back to the old call, text drawn in
+GleamUI's slices would differ slightly from the rest of the window.
+
+**Retire when:** upstream lets a deferred canvas take surface properties.
+Check on every milestone bump.
 
 ## Retired patches (the precedent)
 
