@@ -28,9 +28,10 @@ Two edits, both in src/dawn/native/d3d12/QueueD3D12.cpp:
    (DAWN_BACKEND_DEVICE_LOST_ERROR, named DAWN_DEVICE_LOST_ERROR before
    m156's Dawn), and returning
    early as soon as the serial completes. Exhausting the budget returns
-   DAWN_INTERNAL_ERROR, which DeviceBase::HandleError promotes to a device
-   loss — so the consequence of a hung fence becomes the ordinary
-   lost-device signal a caller can rebuild from.
+   DAWN_UNRECOVERABLE_ERROR (named DAWN_INTERNAL_ERROR before m157's Dawn),
+   which DeviceBase::HandleError promotes to a device loss — so the
+   consequence of a hung fence becomes the ordinary lost-device signal a
+   caller can rebuild from.
 
    The bound is applied to WaitForSerial itself rather than to the swap
    chain's call site because WaitForQueueSerialImpl is private in
@@ -97,9 +98,10 @@ WAIT_REPLACEMENT = """MaybeError Queue::WaitForSerial(ExecutionSerial serial) {
     // Nothing here can distinguish "this fence will never signal" from "a
     // legitimately extreme wait", and a thread parked forever is the worse of
     // the two outcomes: legitimate waits are frame-pacing scale, two orders of
-    // magnitude below this budget even on a software adapter. The internal
-    // error is promoted to a device loss by DeviceBase::HandleError, so the
-    // caller sees the ordinary lost-device signal and can rebuild.
+    // magnitude below this budget even on a software adapter. The
+    // unrecoverable error is promoted to a device loss by
+    // DeviceBase::HandleError, so the caller sees the ordinary lost-device
+    // signal and can rebuild.
     static constexpr uint32_t kWaitSliceCount = 10;
     static constexpr Nanoseconds kWaitSliceTimeout = Nanoseconds(uint64_t(1000000000));
     for (uint32_t slice = 0; slice < kWaitSliceCount; ++slice) {
@@ -110,7 +112,7 @@ WAIT_REPLACEMENT = """MaybeError Queue::WaitForSerial(ExecutionSerial serial) {
             return {};
         }
     }
-    return DAWN_INTERNAL_ERROR(
+    return DAWN_UNRECOVERABLE_ERROR(
         "D3D12 fence wait exceeded its bounded budget; treating the device as lost.");
 }
 """

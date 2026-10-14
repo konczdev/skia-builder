@@ -74,7 +74,8 @@ patch.
 
 **What:** bounds `d3d12::Queue::WaitForSerial` — ten one-second slices with
 a `CheckPassedSerials()` between them, an early return the moment the serial
-completes, and `DAWN_INTERNAL_ERROR` when the whole budget expires — and
+completes, and `DAWN_UNRECOVERABLE_ERROR` (Dawn's `DAWN_INTERNAL_ERROR`
+before m157) when the whole budget expires — and
 makes `Queue::SetEventOnCompletion` check and log the HRESULT it used to
 discard. One file: `QueueD3D12.cpp`.
 
@@ -87,7 +88,7 @@ a render thread RUNNABLE-in-native inside the swap chain's
 `GetCurrentTexture` on a WARP-saturated run, window frozen, no error ever
 produced and therefore nothing for device-loss recovery to classify. The
 budget expiry is deliberately destructive: `DeviceBase::HandleError`
-promotes the internal error to a device loss, which turns a permanent park
+promotes the unrecoverable error to a device loss, which turns a permanent park
 into one recovery stutter. The bound also reaches `WaitForSerial`'s other
 callers (`DetachAndWaitForDeallocation`, `WaitForIdleForDestructionImpl`,
 `OpenPendingCommands`), so a teardown that would hang forever on a dead
