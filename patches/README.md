@@ -57,8 +57,11 @@ script's own success line):
   off-Apple).
 - `apply_skia_graphite_deferred_canvas_props.py` →
   `Patched Recorder.h (makeDeferredCanvas with SkSurfaceProps)`,
-  `Patched Recorder.cpp (makeDeferredCanvas with SkSurfaceProps)` (or the
-  `already patched` forms on a re-run). A Skia without it fails loudly
+  `Patched Recorder.cpp (makeDeferredCanvas with SkSurfaceProps, null device guard)`,
+  `Patched Recording.cpp (deferred target description check)` (or the
+  `already patched` forms on a re-run; a checkout patched by the script's
+  earlier form gets `Patched Recorder.cpp (null device guard)` instead of
+  the second line). A Skia without it fails loudly
   downstream: skia-gleam's `skg_recorder_make_deferred_canvas` calls the
   three-argument overload and does not compile against an unpatched header.
 
@@ -146,9 +149,15 @@ to discover the import graph dependencies"). Skia consumes only Dawn's
 the dawncpp_module import-graph error; no libraries are produced at all
 (this one fails loudly downstream, unlike the others).
 
-**Retire when:** CMake learns clang-cl module scanning, or Dawn's probe
-starts detecting the CMake+clang-cl combination itself. Re-test by
-removing the patch on a milestone bump and watching the generate step.
+**Retire when:** the CMake of the CI runners that build the published
+libraries can scan C++ modules for clang-cl (CMake 4.4 or newer), or
+Dawn's probe starts detecting the CMake+clang-cl combination itself. No
+local build without the patch is needed (the owner's decision at m157);
+at each milestone update, read the CMake version in the runner image's
+list (`windows-2025`:
+https://raw.githubusercontent.com/actions/runner-images/main/images/windows/Windows2025-Readme.md).
+At m157 (2026-10-14) the image of 2026-10-04 had CMake 3.31.6, so the
+patch stays.
 
 ### apply_dawn_dxc_option.py — ours, 2026-10-07
 
