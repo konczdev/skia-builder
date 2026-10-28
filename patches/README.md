@@ -157,7 +157,8 @@ at each milestone update, read the CMake version in the runner image's
 list (`windows-2025`:
 https://raw.githubusercontent.com/actions/runner-images/main/images/windows/Windows2025-Readme.md).
 At m157 (2026-10-14) the image of 2026-10-04 had CMake 3.31.6, so the
-patch stays.
+patch stays. At m158 (2026-10-28) the image of 2026-10-21
+(`20261021.299.1`) still has CMake 3.31.6.
 
 ### apply_dawn_dxc_option.py — ours, 2026-10-07
 
